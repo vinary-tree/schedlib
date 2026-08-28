@@ -1,0 +1,50 @@
+@startuml
+title Deterministic Scheduler State Machine
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam state {
+  FontColor #0F172A
+  BorderColor #334155
+}
+
+state "Unvalidated" as Unvalidated #DBEAFE
+state "Executing\ncurrent batch" as Executing #DCFCE7
+state "Committing\nstable order" as Committing #CCFBF1
+state "Rejected cycle" as RejectedCycle #FECACA
+state "Resource exhausted" as Exhausted #FED7AA
+state "Failed" as Failed #FDA4AF
+state "Cancelled" as Cancelled #FDE68A
+state "Completed" as Completed #A7F3D0
+
+[*] --> Unvalidated
+Unvalidated -[#DC2626]-> RejectedCycle : cyclic relation
+Unvalidated -[#EA580C]-> Exhausted : task cost exceeds budget
+Unvalidated -[#16A34A]-> Executing : accept canonical plan
+
+Executing -[#16A34A]-> Executing : one current-batch worker completes
+Executing -[#0F766E]-> Committing : complete batch and cancellation not due
+Executing -[#D97706]-> Cancelled : request then acknowledge at boundary
+
+Committing -[#0F766E]-> Committing : publish next successful task
+Committing -[#2563EB]-> Executing : next batch
+Committing -[#DC2626]-> Failed : publish first canonical failure
+Committing -[#D97706]-> Cancelled : request then acknowledge at boundary
+Committing -[#16A34A]-> Completed : publish final successful task
+
+RejectedCycle --> [*]
+Exhausted --> [*]
+Failed --> [*]
+Cancelled --> [*]
+Completed --> [*]
+
+legend right
+|= Color |= Meaning |
+|<#DBEAFE>| Validation |
+|<#DCFCE7>| Worker execution |
+|<#CCFBF1>| Ordered publication |
+|<#A7F3D0>| Successful terminal |
+|<#FECACA>| Invalid or failed terminal |
+|<#FDE68A>| Cancellation terminal |
+endlegend
+@enduml

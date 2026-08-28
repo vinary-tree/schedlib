@@ -1,0 +1,39 @@
+@startuml
+title Arbitrary Completion, Deterministic Observation
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #334155
+  LifeLineBorderColor #475569
+  LifeLineBackgroundColor #E2E8F0
+}
+
+actor "Caller" as Caller #F9A8D4
+participant "Plan builder" as Planner #4ADE80
+participant "Parallel adapter" as Adapter #FCD34D
+participant "Worker for task 1" as W1 #93C5FD
+participant "Worker for task 2" as W2 #A5B4FC
+participant "Ordered commit" as Commit #2DD4BF
+
+Caller -[#BE185D]> Planner : immutable input
+Planner -[#16A34A]> Planner : exact validation
+Planner -[#16A34A]> Planner : canonical topology and first-fit
+Planner -[#D97706]> Adapter : immutable batch [1, 2]
+
+par task 1
+  Adapter -[#2563EB]> W1 : execute task 1
+else task 2
+  Adapter -[#4F46E5]> W2 : execute task 2
+end
+
+W2 -[#4F46E5]> Adapter : task 2 completes first
+Adapter -[#0F766E]> Commit : store result 2 internally
+note right of Commit #FEF3C7
+  Result 2 is not observable yet.
+end note
+W1 -[#2563EB]> Adapter : task 1 completes later
+Adapter -[#0F766E]> Commit : store result 1 internally
+Commit -[#BE185D]> Caller : publish task 1
+Commit -[#BE185D]> Caller : publish task 2
+Commit -[#16A34A]> Caller : canonical terminal phase
+@enduml

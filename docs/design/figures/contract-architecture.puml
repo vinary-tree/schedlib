@@ -1,0 +1,49 @@
+@startuml
+title schedlib Contract and Refinement Architecture
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam ArrowColor #334155
+skinparam defaultFontColor #0F172A
+
+package "Formal contract" #DBEAFE {
+  [TLA+ state machine] as TLA #93C5FD
+  [TLAPS kernel theorem] as TLAPS #A5B4FC
+  [Refinement registry] as Registry #C4B5FD
+}
+
+package "Production schedlib" #DCFCE7 {
+  [Immutable input snapshot] as Input #86EFAC
+  [Deterministic plan builder] as Planner #4ADE80
+  [Serial executor] as Serial #6EE7B7
+  [Ordered commit machine] as Commit #2DD4BF
+}
+
+package "Optional adapters" #FEF3C7 {
+  [Parallel runtime adapter] as Parallel #FCD34D
+}
+
+package "Consumers" #FCE7F3 {
+  [lling-llang] as LlingLlang #F9A8D4
+  [Other Vinary crates] as Others #F0ABFC
+}
+
+TLA -[#2563EB]-> Registry : safety and liveness
+TLAPS -[#4F46E5]-> Registry : algebraic theorem
+Registry -[#7C3AED]-> Planner : refinement obligations
+Registry -[#7C3AED]-> Serial : test obligations
+Input -[#16A34A]-> Planner : validate and plan
+Planner -[#16A34A]-> Serial : immutable batches
+Planner -[#D97706]-> Parallel : same immutable batches
+Serial -[#0F766E]-> Commit : completed outcomes
+Parallel -[#0F766E]-> Commit : arbitrarily ordered outcomes
+Commit -[#BE185D]-> LlingLlang : canonical prefix
+Commit -[#A21CAF]-> Others : canonical prefix
+LlingLlang -[#BE185D]-> Input : tasks and policy
+Others -[#A21CAF]-> Input : tasks and policy
+
+note bottom of Parallel #FEF3C7
+  Adapters may change execution timing,
+  never plan or observation semantics.
+end note
+@enduml

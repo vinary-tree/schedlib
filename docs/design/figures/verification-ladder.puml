@@ -1,0 +1,36 @@
+@startuml
+title Verification and Acceptance Ladder
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam rectangle {
+  FontColor #0F172A
+  BorderColor #334155
+  RoundCorner 12
+}
+rectangle "Write TLA+ state machine\nand shared kernel" as Model #93C5FD
+rectangle "Prove nonrecursive kernel\nwith TLAPS" as Proof #A5B4FC
+rectangle "Exhaust every bounded input\nand reachable TLC state" as Exhaust #60A5FA
+rectangle "Counterexample?" as Counterexample #FDE68A
+rectangle "Correct the specification\nwithout weakening obligations" as Correct #FCA5A5
+rectangle "Extract every invariant into\nthe refinement registry" as Registry #C4B5FD
+rectangle "Add exhaustive, property,\nmetamorphic, and small-stack tests" as Tests #F9A8D4
+rectangle "Observe the test-only baseline\nfail for missing production behavior" as Red #FED7AA
+rectangle "Implement iterative,\noptimized production machines" as Implement #86EFAC
+rectangle "Run correctness, stack,\ncomplexity, and lifecycle gates" as Correctness #6EE7B7
+rectangle "Run preregistered performance\nand allocation gates" as Performance #FCD34D
+rectangle "Lint documentation, render diagrams,\nand pass the pgmcp bug gate" as Acceptance #2DD4BF
+
+Model -[#2563EB]-> Proof
+Proof -[#4F46E5]-> Exhaust
+Exhaust -[#D97706]-> Counterexample
+Counterexample -[#DC2626]-> Correct : yes
+Correct -[#DC2626]-> Model : revise and rerun
+Counterexample -[#7C3AED]-> Registry : no
+Registry -[#BE185D]-> Tests
+Tests -[#EA580C]-> Red
+Red -[#16A34A]-> Implement
+Implement -[#0F766E]-> Correctness
+Correctness -[#D97706]-> Performance
+Performance -[#0F766E]-> Acceptance
+@enduml
