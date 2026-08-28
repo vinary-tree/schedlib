@@ -33,10 +33,11 @@ Serial executor
   cursors, captures results, and drives ordered commit synchronously.
 
 Parallel adapter
-: Optional executor that dispatches one independent batch to a runtime. It may
-  receive completions in any order but cannot bypass ordered commit. Runtime
-  adapters implement `BatchExecutor`; schedlib's core neither selects nor
-  initializes their thread or asynchronous runtime.
+: Optional executor that dispatches one independent batch to a runtime. The
+  `rayon` feature supplies an owned local pool with an exact worker count and
+  optional worker-stack size. Its indexed iterator joins before returning a
+  canonical completion vector. Other runtime adapters implement
+  `BatchExecutor`; none can bypass core validation or ordered commit.
 
 Ordered commit machine
 : The sole publication boundary. It converts an unordered completed-result set
@@ -56,6 +57,11 @@ prefix, explicit cursors, and cancellation observation. Borrowed `TaskView` and
 `BatchView` values prevent workers from mutating plan metadata. Results move
 exactly once from the internal store to the ordered commit sink.
 
+`RayonExecutor` shares one immutable `ParallelTaskExecutor` among workers.
+Task payloads require `Sync`; result values require `Send`. It does not mutate
+Rayon's global pool, spawn detached work, or support shared-state Replete
+saturation.
+
 ## Why schedlib is independent
 
 Keeping schedlib standalone provides one verified scheduler contract to
@@ -72,3 +78,8 @@ A PDA would add unnecessary control and storage for these operations. If a
 future task language introduces mutual recursion over nested terms, that
 extension must refine its denotation to a specialized iterative PDA outside the
 flat scheduler core.
+
+Rayon's indexed splitting is a balanced runtime implementation detail with
+logarithmic depth. schedlib adds no recursive adapter control. Acceptance runs
+a 20,000-task independent batch with both the caller thread and four Rayon
+workers configured to 64 KiB native stacks.

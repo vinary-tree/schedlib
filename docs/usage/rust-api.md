@@ -111,3 +111,32 @@ members are pairwise independent and within budget. It must return exactly one
 missing completions cause `ExecutionError` before the current batch publishes.
 The adapter owns runtime-specific worker limits, panic handling, and shutdown;
 it cannot alter plan or commit order.
+
+### Built-in Rayon adapter
+
+Enable the optional feature and run the compile-checked example:
+
+```sh
+cargo run --release --features rayon --example rayon
+```
+
+Implement `ParallelTaskExecutor<T>` with an immutable `&self` callback, choose
+an exact positive worker count, and construct one reusable owned pool:
+
+```rust
+use std::num::NonZeroUsize;
+use schedlib::{RayonBuildError, RayonConfig, RayonExecutor};
+
+fn build_executor<W>(worker: W) -> Result<RayonExecutor<W>, RayonBuildError> {
+    let threads = NonZeroUsize::new(4).expect("four is positive");
+    let config = RayonConfig::new(threads);
+    RayonExecutor::new(worker, config)
+}
+```
+
+The full, semantically checked program is
+[`examples/rayon.rs`](../../examples/rayon.rs). A caller may add
+`with_worker_stack_size` when it needs an explicit native-stack budget.
+Task payloads must be `Sync`, and output, failure, and incomplete values must be
+`Send`. The adapter returns only after all current-batch callbacks join. Worker
+panics propagate according to Rayon and are never relabeled as typed outcomes.

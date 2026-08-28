@@ -16,9 +16,9 @@ regressions bring the executed implementation suite to 74 tests.
 
 The optional Rayon adapter has its own eight-row registry at
 [`../../formal/rayon-refinement-map.tsv`](../../formal/rayon-refinement-map.tsv).
-Its rows begin at `required-before-implementation`. They advance atomically to
-`accepted` only after the parallel red baseline and every worker-count, timing,
-join, lifecycle, small-stack, and equivalence test passes.
+All eight rows are now `accepted`. They advanced atomically only after the
+parallel red baseline and every worker-count, timing, join, lifecycle,
+small-stack, and equivalence test passed in debug and optimized-release builds.
 
 ## Test layers
 

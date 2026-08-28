@@ -118,6 +118,13 @@ impl<'a, T> BatchView<'a, T> {
         }
         self.plan.task(task_id).map(|task| TaskView { task })
     }
+
+    #[cfg(feature = "rayon")]
+    pub(crate) fn known_task(&self, task_id: TaskId) -> TaskView<'a, T> {
+        TaskView {
+            task: self.plan.known_task(task_id),
+        }
+    }
 }
 
 /// Serial worker callback for one immutable task.

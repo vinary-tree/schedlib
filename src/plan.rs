@@ -80,6 +80,8 @@ impl PlanBatch {
 pub enum ControlModel {
     /// Flat graph planning and execution use iterative queues and cursors.
     FlatIterative,
+    /// An indexed parallel iterator joins before returning canonical results.
+    ParallelIndexedJoin,
 }
 
 /// Exact logical event counts and proven storage bounds for one plan build.
@@ -285,6 +287,12 @@ impl<T> Plan<T> {
             *self.batch_of.get(task_index)?,
             *self.position_in_batch.get(task_index)?,
         ))
+    }
+
+    #[cfg(feature = "rayon")]
+    pub(crate) fn known_task(&self, id: TaskId) -> &TaskSpec<T> {
+        let dense_index = self.task_index[&id];
+        &self.tasks[dense_index]
     }
 }
 

@@ -14,6 +14,7 @@ use schedlib::{
 };
 
 type TestReport = ExecutionReport<u64, (), ()>;
+type CanonicalObservation = (ExecutionPhase, Vec<CommittedTask<u64, (), ()>>, Vec<TaskId>);
 
 fn positive_usize(value: usize) -> NonZeroUsize {
     NonZeroUsize::new(value).expect("the test fixture uses a positive value")
@@ -489,7 +490,7 @@ fn prop_rayon_commit_provenance_is_canonical() {
 #[test]
 fn prop_rayon_timing_is_unobservable() {
     let plan = independent_plan(64);
-    let mut expected: Option<Vec<_>> = None;
+    let mut expected: Option<CanonicalObservation> = None;
     for worker_threads in [1, 2, 4] {
         for timing_seed in 0..8 {
             let observations = Observations::new(64);

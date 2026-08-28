@@ -88,9 +88,9 @@ production symbol is acceptable only when every row naming that symbol has:
    `accepted`.
 
 [`rayon-refinement-map.tsv`](rayon-refinement-map.tsv) applies the same rule to
-the optional Rayon adapter. Its rows remain `required-before-implementation`
-until the test-only baseline fails for the missing adapter and the completed
-implementation passes every named test. The model assumes finite nonpanicking
-task callbacks: Rust panics are outside `TaskExecution` and therefore propagate
-according to Rayon rather than being misreported as typed success, failure, or
-incompleteness.
+the optional Rayon adapter. All eight rows are `accepted`: repository history
+preserves the test-only missing-adapter failure, and the completed implementation
+passes every named test in debug and optimized-release builds. The model assumes
+finite nonpanicking task callbacks: Rust panics are outside `TaskExecution` and
+therefore propagate according to Rayon rather than being misreported as typed
+success, failure, or incompleteness.

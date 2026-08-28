@@ -46,6 +46,7 @@ run_gate cargo-check-msrv env CARGO_TARGET_DIR="$msrv_target_directory" \
 run_gate cargo-clippy cargo clippy --all-targets --all-features -- -D warnings
 run_gate cargo-test-debug cargo test --all-targets --all-features
 run_gate cargo-test-release cargo test --all-targets --all-features --release
-run_gate cargo-run-example cargo run --release --example serial
+run_gate cargo-run-example cargo run --release --all-features --example serial
+run_gate cargo-run-rayon-example cargo run --release --all-features --example rayon
 run_gate cargo-test-doc cargo test --doc --all-features
 run_gate cargo-doc env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features

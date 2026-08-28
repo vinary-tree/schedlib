@@ -98,3 +98,24 @@ S_{\mathrm{plan}}=O(V+E+R+P).
 work bound, logical allocation sites, and a conservative temporary-slot bound.
 `ExecutionWorkProfile` records dispatch, completion, commit, current-batch
 scratch, and execution allocation events.
+
+## Optional indexed parallel join
+
+With the `rayon` feature, one owned pool is constructed once and reused across
+executions. For a batch of $`b`$ tasks and $`w`$ workers, schedlib supplies one
+indexed immutable task slice to Rayon and collects one canonical completion
+vector:
+
+```math
+W_{\mathrm{adapter}}(b)=O(b),
+\qquad S_{\mathrm{adapter}}(b,w)=O(b+w),
+```
+
+excluding caller callback work and Rayon's fixed pool bookkeeping. Indexed
+collection preserves stable batch order without a post-sort. The call to
+`ThreadPool::install` returns only after the batch joins; core validation then
+maps completions to preindexed slots in expected linear total work.
+
+schedlib introduces no recursive adapter function. Rayon uses balanced indexed
+splitting, whose runtime control depth is logarithmic in $`b`$. The dedicated
+small-stack gate exercises 20,000 tasks with 64 KiB caller and worker stacks.

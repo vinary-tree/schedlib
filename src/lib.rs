@@ -11,6 +11,8 @@
 mod effects;
 mod execution;
 mod plan;
+#[cfg(feature = "rayon")]
+mod rayon_adapter;
 mod types;
 
 pub use effects::{EffectSet, IndependenceWitness, TaskEffects};
@@ -20,4 +22,6 @@ pub use execution::{
     TaskCompletion, TaskExecution, TaskExecutor, TaskView,
 };
 pub use plan::{ControlModel, Plan, PlanBatch, PlanBuilder, PlanError, PlanWorkProfile, TaskSpec};
+#[cfg(feature = "rayon")]
+pub use rayon_adapter::{ParallelTaskExecutor, RayonBuildError, RayonConfig, RayonExecutor};
 pub use types::{Budget, Cost, ResourceId, TaskId};

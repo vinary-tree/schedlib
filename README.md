@@ -5,7 +5,8 @@ Vinary categorical optimization pipeline. The production serial core refines
 the repository's TLA+ state machine and TLAPS theorem. It constructs immutable
 plans over libvgraph canonical CSR, accepts injected task or batch executors,
 and normalizes arbitrary batch completion order through stable ordered commit.
-The core requires no asynchronous runtime or thread pool.
+The core requires no asynchronous runtime or thread pool; the optional
+`rayon` feature provides an owned, explicitly sized local pool.
 
 The contract separates a deterministic immutable plan from potentially
 parallel execution. Stable task identifiers determine a canonical topological
@@ -28,6 +29,8 @@ The formal baseline covers:
   two;
 - all 27 success/failure/incomplete maps crossed with all 4 cancellation
   boundaries for the three-task outcome model; and
+- all 528 reachable bounded-dispatch, completion, and join states for four
+  tasks at Rayon worker counts 1, 2, and 4; and
 - one TLAPS theorem proving that the shared effect-independence kernel is
   symmetric.
 
@@ -37,6 +40,9 @@ names are audited mechanically. The production suite also crosses validation
 precedence, sparse stable identifiers, duplicate edges, maximum-width costs,
 and effect canonicalization. Deep-chain, wide-DAG, success, failure,
 incomplete, cancellation, and destruction paths run on 64 KiB native stacks.
+The Rayon refinement adds 16 tests, including every four-task physical
+completion permutation and a 20,000-task batch on 64 KiB caller and worker
+stacks.
 
 ## Use the serial core
 
@@ -49,6 +55,13 @@ outline:
 3. inject `SerialExecutor` or another complete-batch executor; and
 4. observe only the stable prefix delivered through `CommitSink` and
    `ExecutionReport`.
+
+Enable `rayon` to use `RayonExecutor` with an exact positive worker count. The
+parallel example is compile-checked and executed by the acceptance gate:
+
+```sh
+cargo run --release --features rayon --example rayon
+```
 
 ## Documentation map
 
