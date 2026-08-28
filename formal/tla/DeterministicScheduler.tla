@@ -19,14 +19,15 @@ EXTENDS FiniteSets, Naturals, SchedulerKernels, Sequences, TLC
 
 CONSTANTS TaskCount, ResourceCount, Budget, Scenario
 
-ASSUME /\ TaskCount \in Nat \ {0}
+ASSUME /\ TaskCount \in Nat
        /\ ResourceCount \in Nat \ {0}
        /\ Budget \in Nat \ {0}
-       /\ Scenario \in {"Dependencies", "Effects", "Resources", "Outcomes"}
+       /\ Scenario \in
+            {"Empty", "Dependencies", "Effects", "Resources", "Outcomes"}
 
 Tasks == 1..TaskCount
 Resources == 1..ResourceCount
-Outcomes == {"Success", "Failure"}
+Outcomes == {"Success", "Failure", "Incomplete"}
 
 TaskPairs == Tasks \X Tasks
 NonReflexiveTaskPairs ==
@@ -291,15 +292,21 @@ Phases ==
    "Committing",
    "Completed",
    "Failed",
+   "Incomplete",
    "Cancelled",
    "RejectedCycle",
    "Exhausted"}
 
 TerminalPhases ==
-  {"Completed", "Failed", "Cancelled", "RejectedCycle", "Exhausted"}
+  {"Completed",
+   "Failed",
+   "Incomplete",
+   "Cancelled",
+   "RejectedCycle",
+   "Exhausted"}
 
 ExecutionTerminalPhases ==
-  {"Completed", "Failed", "Cancelled"}
+  {"Completed", "Failed", "Incomplete", "Cancelled"}
 
 CurrentBatch ==
   IF batchIndex \in 1..Len(plan)
@@ -350,8 +357,23 @@ RejectResources ==
                   committed,
                   cancelRequested>>
 
+AcceptEmpty ==
+  /\ phase = "Unvalidated"
+  /\ Tasks = {}
+  /\ Acyclic(deps)
+  /\ ResourcesAdmissible(costs)
+  /\ phase' = "Completed"
+  /\ plan' = <<>>
+  /\ batchIndex' = 0
+  /\ commitIndex' = 0
+  /\ UNCHANGED <<inputVars,
+                  completedResults,
+                  committed,
+                  cancelRequested>>
+
 AcceptPlan ==
   /\ phase = "Unvalidated"
+  /\ Tasks # {}
   /\ Acyclic(deps)
   /\ ResourcesAdmissible(costs)
   /\ plan' = CanonicalPlan(deps, reads, writes, costs)
@@ -430,21 +452,27 @@ CommitNext ==
                 /\ batchIndex' = batchIndex
                 /\ commitIndex' = commitIndex + 1
               ELSE
-                IF commitIndex < Len(CurrentBatch)
+                IF outcomes[task] = "Incomplete"
                 THEN
-                  /\ phase' = "Committing"
+                  /\ phase' = "Incomplete"
                   /\ batchIndex' = batchIndex
                   /\ commitIndex' = commitIndex + 1
                 ELSE
-                  IF batchIndex < Len(plan)
+                  IF commitIndex < Len(CurrentBatch)
                   THEN
-                    /\ phase' = "Executing"
-                    /\ batchIndex' = batchIndex + 1
-                    /\ commitIndex' = 0
-                  ELSE
-                    /\ phase' = "Completed"
+                    /\ phase' = "Committing"
                     /\ batchIndex' = batchIndex
                     /\ commitIndex' = commitIndex + 1
+                  ELSE
+                    IF batchIndex < Len(plan)
+                    THEN
+                      /\ phase' = "Executing"
+                      /\ batchIndex' = batchIndex + 1
+                      /\ commitIndex' = 0
+                    ELSE
+                      /\ phase' = "Completed"
+                      /\ batchIndex' = batchIndex
+                      /\ commitIndex' = commitIndex + 1
   /\ UNCHANGED <<inputVars,
                   plan,
                   completedResults,
@@ -453,6 +481,7 @@ CommitNext ==
 Next ==
   RejectCycle
   \/ RejectResources
+  \/ AcceptEmpty
   \/ AcceptPlan
   \/ (\E task \in Tasks : WorkerComplete(task))
   \/ BeginCommit
@@ -513,20 +542,37 @@ FirstFailurePosition ==
   THEN TaskCount + 1
   ELSE MinNat(FailurePositions)
 
+IncompletePositions ==
+  {position \in 1..Len(FlattenBatches(plan)) :
+     outcomes[FlattenBatches(plan)[position]] = "Incomplete"}
+
+FirstIncompletePosition ==
+  IF IncompletePositions = {}
+  THEN TaskCount + 1
+  ELSE MinNat(IncompletePositions)
+
+FirstNonSuccessPosition ==
+  MinNat({FirstFailurePosition, FirstIncompletePosition})
+
+NonSuccessTerminalPhase(position) ==
+  IF outcomes[FlattenBatches(plan)[position]] = "Failure"
+  THEN "Failed"
+  ELSE "Incomplete"
+
 SerialTerminalPhase ==
-  IF cancelAfter < FirstFailurePosition /\ cancelAfter < TaskCount
+  IF cancelAfter < FirstNonSuccessPosition /\ cancelAfter < TaskCount
   THEN "Cancelled"
   ELSE
-    IF FirstFailurePosition <= TaskCount
-    THEN "Failed"
+    IF FirstNonSuccessPosition <= TaskCount
+    THEN NonSuccessTerminalPhase(FirstNonSuccessPosition)
     ELSE "Completed"
 
 SerialCommitCount ==
   IF SerialTerminalPhase = "Cancelled"
   THEN cancelAfter
   ELSE
-    IF SerialTerminalPhase = "Failed"
-    THEN FirstFailurePosition
+    IF SerialTerminalPhase \in {"Failed", "Incomplete"}
+    THEN FirstNonSuccessPosition
     ELSE TaskCount
 
 SerialParallelObservationalEquivalence ==
@@ -540,6 +586,11 @@ FailurePropagationIsFailFast ==
     /\ Len(committed) > 0
     /\ outcomes[committed[Len(committed)]] = "Failure"
 
+IncompletePropagationIsFailFast ==
+  phase = "Incomplete" =>
+    /\ Len(committed) > 0
+    /\ outcomes[committed[Len(committed)]] = "Incomplete"
+
 CancellationIsBoundaryExact ==
   phase = "Cancelled" =>
     /\ cancelRequested
@@ -551,6 +602,13 @@ CompletionIsTotal ==
     /\ SeqSet(committed) = Tasks
     /\ Len(committed) = TaskCount
     /\ \A task \in Tasks : outcomes[task] = "Success"
+
+EmptyCompletionIsImmediate ==
+  Tasks = {} =>
+    /\ phase \in {"Unvalidated", "Completed"}
+    /\ plan = <<>>
+    /\ completedResults = {}
+    /\ committed = <<>>
 
 ResultsOnlyGrow ==
   [][completedResults \subseteq completedResults']_vars

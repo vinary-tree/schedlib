@@ -33,6 +33,7 @@ Review these files before cleanup:
 | Evidence | Path |
 | --- | --- |
 | TLA+ syntax | `target/verification/tla-syntax.log` |
+| Empty model | `target/verification/tlc-Empty.log` |
 | Dependency model | `target/verification/tlc-Dependencies.log` |
 | Effect model | `target/verification/tlc-Effects.log` |
 | Resource model | `target/verification/tlc-Resources.log` |

@@ -23,10 +23,11 @@ family.
 
 | Family | Enumeration | Completeness argument |
 | --- | --- | --- |
+| Empty | one input and two reachable states | The zero-task domain has one dependency/effect/cost/outcome interpretation |
 | Dependencies | $`2^{3(3-1)}=64`$ relations | Every directed non-self edge is independently absent or present |
 | Effects | $`(2^2)^{2+2}=256`$ maps | Two tasks are the full arity of the pairwise predicate; two resources cover all set-overlap classes |
 | Resources | $`3^3=27`$ cost maps | Each of three tasks independently takes cost one, two, or the first over-budget value three |
-| Outcomes | $`2^3\cdot4=32`$ inputs | Every success/failure map is crossed with every committed-count boundary |
+| Outcomes | $`3^3\cdot4=108`$ inputs | Every success/failure/incomplete map is crossed with every committed-count boundary |
 
 The effects family was deliberately reduced from three tasks to two after an
 initial run showed redundant expansion. This does not sample the predicate:

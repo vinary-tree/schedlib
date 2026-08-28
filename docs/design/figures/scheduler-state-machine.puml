@@ -14,12 +14,14 @@ state "Committing\nstable order" as Committing #CCFBF1
 state "Rejected cycle" as RejectedCycle #FECACA
 state "Resource exhausted" as Exhausted #FED7AA
 state "Failed" as Failed #FDA4AF
+state "Incomplete" as Incomplete #C4B5FD
 state "Cancelled" as Cancelled #FDE68A
 state "Completed" as Completed #A7F3D0
 
 [*] --> Unvalidated
 Unvalidated -[#DC2626]-> RejectedCycle : cyclic relation
 Unvalidated -[#EA580C]-> Exhausted : task cost exceeds budget
+Unvalidated -[#16A34A]-> Completed : empty input
 Unvalidated -[#16A34A]-> Executing : accept canonical plan
 
 Executing -[#16A34A]-> Executing : one current-batch worker completes
@@ -29,12 +31,14 @@ Executing -[#D97706]-> Cancelled : request then acknowledge at boundary
 Committing -[#0F766E]-> Committing : publish next successful task
 Committing -[#2563EB]-> Executing : next batch
 Committing -[#DC2626]-> Failed : publish first canonical failure
+Committing -[#7C3AED]-> Incomplete : publish first canonical incomplete result
 Committing -[#D97706]-> Cancelled : request then acknowledge at boundary
 Committing -[#16A34A]-> Completed : publish final successful task
 
 RejectedCycle --> [*]
 Exhausted --> [*]
 Failed --> [*]
+Incomplete --> [*]
 Cancelled --> [*]
 Completed --> [*]
 
@@ -45,6 +49,7 @@ legend right
 |<#CCFBF1>| Ordered publication |
 |<#A7F3D0>| Successful terminal |
 |<#FECACA>| Invalid or failed terminal |
+|<#C4B5FD>| Incomplete terminal |
 |<#FDE68A>| Cancellation terminal |
 endlegend
 @enduml

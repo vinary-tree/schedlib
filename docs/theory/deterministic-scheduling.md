@@ -114,13 +114,15 @@ $`C`$ must be a prefix of $`F`$:
 
 Workers can populate an internal result set in any order. Commit waits until
 the current batch is complete, then publishes one task at a time in batch
-order. The first failure terminates after its own publication. A cancellation
-request becomes effective at an exact committed-prefix length, never halfway
-through one commit transition.
+order. The first failure or structured incomplete outcome terminates after its
+own publication. A cancellation request becomes effective at an exact
+committed-prefix length, never halfway through one commit transition.
 
 This serial/parallel observational equivalence is stronger than deterministic
-final output: intermediate prefixes, terminal phase, failure position, and
-cancellation boundary are equal as well.
+final output: intermediate prefixes, terminal phase, first non-success
+position, incomplete reason, and cancellation boundary are equal as well. The
+empty task set is the identity case: validation moves directly to completed
+with empty plan and observation.
 
 ## Formal basis
 

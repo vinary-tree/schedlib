@@ -53,6 +53,11 @@ First-fit batch
 : The earliest batch after every dependency predecessor that can accept a task
   without effect conflict or budget overflow.
 
+Incomplete outcome
+: A task result that is neither success nor semantic failure because the
+  injected executor could not finish. Its caller-defined reason is preserved,
+  committed at canonical position, and terminates the run.
+
 Fairness
 : The TLA+ weak-fairness assumption that an action continuously enabled by the
   scheduler is eventually taken.
@@ -76,4 +81,5 @@ Stable task identifier
   tie breaker used by the canonical order.
 
 Terminal phase
-: Exactly one of completed, failed, cancelled, rejected-cycle, or exhausted.
+: Exactly one of completed, failed, incomplete, cancelled, rejected-cycle, or
+  exhausted.

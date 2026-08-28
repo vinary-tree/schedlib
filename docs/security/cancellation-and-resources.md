@@ -37,10 +37,11 @@ drop unpublished results without recursive destruction.
 
 ## Failure ordering
 
-A worker finishing with failure does not immediately publish that failure if
-an earlier canonical task remains uncommitted. Ordered commit publishes the
-first failure in canonical order and terminates immediately afterward. This
-prevents faster later failures from changing the observable outcome.
+A worker finishing with failure or an incomplete reason does not immediately
+publish that non-success if an earlier canonical task remains uncommitted.
+Ordered commit publishes the first non-success in canonical order and
+terminates immediately afterward. This prevents faster later failures or
+incomplete results from changing the observable outcome.
 
 ## Resource limits for verification
 

@@ -28,10 +28,11 @@ varies one semantic boundary:
 
 | Configuration | Exhaustive input family | Purpose |
 | --- | --- | --- |
+| `Empty.cfg` | The complete zero-task state machine | Atomic empty completion with no work or publication |
 | `Dependencies.cfg` | 64 nonreflexive relations on three tasks | Exact directed-acyclic-graph acceptance and rejection |
 | `Effects.cfg` | 256 read/write assignments on two tasks and two resources | Complete pairwise independence truth kernel |
 | `Resources.cfg` | 27 task-cost maps on three tasks with budget two | Exact resource admission and exhaustion |
-| `Outcomes.cfg` | 8 outcome maps crossed with 4 cancellation counts | Failure, cancellation, completion, and serial equivalence |
+| `Outcomes.cfg` | 27 outcome maps crossed with 4 cancellation counts | Failure, incomplete, cancellation, completion, and serial equivalence |
 
 Two tasks are sufficient for the effect family because `Independent` is a
 pairwise predicate. Two resources exhaust the empty, singleton, overlapping,

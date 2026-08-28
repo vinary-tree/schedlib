@@ -16,17 +16,18 @@ cancellation are all decided by the verified state machine.
 
 The formal baseline covers:
 
+- the complete empty-schedule state machine;
 - all 64 nonreflexive dependency relations over three tasks;
 - all 256 read/write-set assignments in the complete two-task, two-resource
   effect-independence kernel;
 - all 27 admissible-or-exhausted cost assignments for three tasks and budget
   two;
-- all 8 success/failure maps crossed with all 4 cancellation boundaries for
-  the three-task outcome model; and
+- all 27 success/failure/incomplete maps crossed with all 4 cancellation
+  boundaries for the three-task outcome model; and
 - one TLAPS theorem proving that the shared effect-independence kernel is
   symmetric.
 
-The complete obligation map is machine-readable in
+The complete 32-obligation map is machine-readable in
 [`formal/refinement-map.tsv`](formal/refinement-map.tsv). Production work may
 begin only after this formal baseline is committed. Its first change must add
 the exhaustive oracle and property tests named by that map; implementation

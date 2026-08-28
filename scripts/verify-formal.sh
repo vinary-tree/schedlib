@@ -69,8 +69,8 @@ verify_registry() {
       }
       END {
         print "registry obligations: " count
-        if (count != 30) {
-          print "registry must contain exactly 30 extracted obligations"
+        if (count != 32) {
+          print "registry must contain exactly 32 extracted obligations"
           failed = 1
         }
         exit failed
@@ -113,7 +113,7 @@ verify_tla() {
   ) 2>&1 | tee "$syntax_log"
 
   local scenario
-  for scenario in Dependencies Effects Resources Outcomes; do
+  for scenario in Empty Dependencies Effects Resources Outcomes; do
     local scenario_directory="$evidence_directory/tlc-$scenario"
     local scenario_log="$evidence_directory/tlc-$scenario.log"
     rm -rf "$scenario_directory"
