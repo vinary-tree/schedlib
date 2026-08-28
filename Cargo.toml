@@ -11,6 +11,10 @@ keywords = ["scheduling", "deterministic", "concurrency", "stack-safe"]
 categories = ["algorithms", "concurrency"]
 publish = false
 
+[features]
+default = []
+rayon = []
+
 [workspace]
 members = ["."]
 resolver = "2"
@@ -21,6 +25,11 @@ libvgraph = { version = "0.1.0", path = "../libvgraph" }
 [[test]]
 name = "refinement"
 path = "tests/refinement.rs"
+
+[[test]]
+name = "rayon_refinement"
+path = "tests/rayon_refinement.rs"
+required-features = ["rayon"]
 
 [lints.rust]
 unsafe_code = "forbid"

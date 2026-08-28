@@ -38,6 +38,7 @@ run_gate() {
 }
 
 run_gate refinement-registry "$repository_root/scripts/verify-refinement-tests.sh"
+run_gate rayon-refinement-registry "$repository_root/scripts/verify-rayon-tests.sh"
 run_gate cargo-fmt cargo fmt --all -- --check
 run_gate cargo-check cargo check --all-targets --all-features
 run_gate cargo-check-msrv env CARGO_TARGET_DIR="$msrv_target_directory" \
