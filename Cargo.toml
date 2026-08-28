@@ -1,0 +1,31 @@
+[package]
+name = "schedlib"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Dylon Edwards <dylon@f1r3fly.io>"]
+description = "Formally refined deterministic scheduling for Vinary pipelines"
+license = "Apache-2.0"
+repository = "https://github.com/vinary-tree/schedlib"
+keywords = ["scheduling", "deterministic", "concurrency", "stack-safe"]
+categories = ["algorithms", "concurrency"]
+publish = false
+
+[workspace]
+members = ["."]
+resolver = "2"
+
+[dependencies]
+libvgraph = { version = "0.1.0", path = "../libvgraph" }
+
+[[test]]
+name = "refinement"
+path = "tests/refinement.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"
+unwrap_used = "deny"
