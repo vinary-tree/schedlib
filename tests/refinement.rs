@@ -515,6 +515,34 @@ fn exhaustive_batch_order() {
 }
 
 #[test]
+fn regression_late_low_id_is_sorted_within_batch() {
+    let tasks = vec![
+        task(0, 1, &[], &[0]),
+        task(1, 1, &[], &[1]),
+        task(2, 1, &[1], &[]),
+        task(3, 1, &[0], &[]),
+    ];
+    let plan = build_plan(tasks, vec![(TaskId::new(3), TaskId::new(0))], 4)
+        .expect("the targeted relation is acyclic and admissible");
+    assert_eq!(
+        plan.canonical_order(),
+        vec![
+            TaskId::new(1),
+            TaskId::new(2),
+            TaskId::new(3),
+            TaskId::new(0),
+        ]
+    );
+    assert_eq!(
+        plan.batch_task_ids(),
+        vec![
+            vec![TaskId::new(1), TaskId::new(3)],
+            vec![TaskId::new(0), TaskId::new(2)],
+        ]
+    );
+}
+
+#[test]
 fn prop_batch_ids_strictly_increase() {
     for seed in 0..64 {
         let plan = build_plan(

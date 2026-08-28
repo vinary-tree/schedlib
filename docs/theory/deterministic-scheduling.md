@@ -96,11 +96,23 @@ after that floor, the planner selects the first batch satisfying both:
 \end{aligned}
 ```
 
-If none accepts the task, the planner appends a singleton batch. The stable
-consideration order and first-fit rule make the entire plan canonical. This is
-a deterministic policy, not a claim of globally minimum makespan; classical
-resource-constrained scheduling is a distinct optimization problem described
-by Garey and Graham in
+If none accepts the task, the planner appends a singleton batch. Otherwise it
+inserts the task into the selected batch in stable-identifier order. Sorted
+insertion is necessary because minimum-ready Kahn order is canonical but not
+globally increasing: a low identifier can become ready only after a higher
+predecessor has been emitted. Batch assignment still follows first fit; only
+the independent members' internal publication order is canonicalized.
+
+For example, the verified `BatchOrder` scenario uses dependency $`4\to1`$ and
+conflict pairs $`\{1,4\}`$ and $`\{2,3\}`$. Kahn order is
+$`\langle2,3,4,1\rangle`$. Append-only placement would incorrectly produce
+the decreasing batch $`\langle3,1\rangle`$; sorted insertion produces the
+unique plan $`\langle\langle2,4\rangle,\langle1,3\rangle\rangle`$.
+
+The stable consideration order, first-fit rule, and sorted insertion make the
+entire plan canonical. This is a deterministic policy, not a claim of globally
+minimum makespan; classical resource-constrained scheduling is a distinct
+optimization problem described by Garey and Graham in
 [“Bounds for Multiprocessor Scheduling with Resource Constraints”](https://doi.org/10.1137/0204015).
 
 ## Ordered observation

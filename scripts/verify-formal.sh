@@ -113,7 +113,7 @@ verify_tla() {
   ) 2>&1 | tee "$syntax_log"
 
   local scenario
-  for scenario in Empty Dependencies Effects Resources Outcomes; do
+  for scenario in Empty BatchOrder Dependencies Effects Resources Outcomes; do
     local scenario_directory="$evidence_directory/tlc-$scenario"
     local scenario_log="$evidence_directory/tlc-$scenario.log"
     rm -rf "$scenario_directory"

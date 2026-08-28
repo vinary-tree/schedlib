@@ -29,6 +29,7 @@ varies one semantic boundary:
 | Configuration | Exhaustive input family | Purpose |
 | --- | --- | --- |
 | `Empty.cfg` | The complete zero-task state machine | Atomic empty completion with no work or publication |
+| `BatchOrder.cfg` | The minimal four-task late-low-identifier counterexample | Sorted insertion within a deterministic first-fit batch |
 | `Dependencies.cfg` | 64 nonreflexive relations on three tasks | Exact directed-acyclic-graph acceptance and rejection |
 | `Effects.cfg` | 256 read/write assignments on two tasks and two resources | Complete pairwise independence truth kernel |
 | `Resources.cfg` | 27 task-cost maps on three tasks with budget two | Exact resource admission and exhaustion |
@@ -38,6 +39,16 @@ Two tasks are sufficient for the effect family because `Independent` is a
 pairwise predicate. Two resources exhaust the empty, singleton, overlapping,
 and disjoint set relationships. The state machine still checks full batch
 pairwise independence through `PlanIsCanonicalAndLawful`.
+
+`BatchOrder.cfg` factorizes planning from execution and closes a boundary that
+the three-task families cannot expose. Its two-state planning transition checks
+the same validation and plan-law invariants without redundantly multiplying
+the already-exhaustive execution interleavings. Minimum-ready Kahn order is
+canonical but not globally increasing. A task with a low identifier can become
+ready late and fit an existing later batch. The
+planner therefore inserts it at its sorted position rather than appending it.
+The fixed scenario proves the resulting plan is `<<2, 4>, <1, 3>>` for the
+dependency `4 -> 1` and conflict pairs `{1, 4}` and `{2, 3}`.
 
 ## Commands
 

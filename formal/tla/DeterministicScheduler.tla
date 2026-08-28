@@ -23,7 +23,12 @@ ASSUME /\ TaskCount \in Nat
        /\ ResourceCount \in Nat \ {0}
        /\ Budget \in Nat \ {0}
        /\ Scenario \in
-            {"Empty", "Dependencies", "Effects", "Resources", "Outcomes"}
+            {"Empty",
+             "Dependencies",
+             "Effects",
+             "Resources",
+             "Outcomes",
+             "BatchOrder"}
 
 Tasks == 1..TaskCount
 Resources == 1..ResourceCount
@@ -104,6 +109,13 @@ PairwiseIndependent(batch, readSets, writeSets) ==
         batch[leftIndex],
         batch[rightIndex])
 
+SortedInsert(sequence, task) ==
+  LET position ==
+        Cardinality({member \in SeqSet(sequence) : member < task}) + 1
+  IN SubSeq(sequence, 1, position - 1)
+       \o <<task>>
+       \o SubSeq(sequence, position, Len(sequence))
+
 BatchAccepts(batch, task, readSets, writeSets, taskCosts) ==
   /\ \A member \in SeqSet(batch) :
        Independent(readSets, writeSets, member, task)
@@ -148,7 +160,7 @@ PlaceTask(
      ELSE
        LET target == MinNat(candidates)
        IN [batches EXCEPT
-             ![target] = Append(@, task)]
+             ![target] = SortedInsert(@, task)]
 
 RECURSIVE BuildPlan(_, _, _, _, _, _, _)
 BuildPlan(
@@ -223,10 +235,27 @@ ForkJoinDependencies ==
   THEN {<<1, 3>>, <<2, 3>>}
   ELSE {}
 
+BatchOrderDependencies ==
+  IF TaskCount = 4
+  THEN {<<4, 1>>}
+  ELSE {}
+
 EmptyReads == [task \in Tasks |-> {}]
 EmptyWrites == [task \in Tasks |-> {}]
 UnitCosts == [task \in Tasks |-> 1]
 AllSuccess == [task \in Tasks |-> "Success"]
+
+BatchOrderReads ==
+  [task \in Tasks |->
+    IF task = 3
+    THEN {2}
+    ELSE IF task = 4 THEN {1} ELSE {}]
+
+BatchOrderWrites ==
+  [task \in Tasks |->
+    IF task = 1
+    THEN {1}
+    ELSE IF task = 2 THEN {2} ELSE {}]
 
 DependencyInputs ==
   IF Scenario = "Dependencies"
@@ -234,17 +263,26 @@ DependencyInputs ==
   ELSE
     IF Scenario = "Outcomes"
     THEN {ForkJoinDependencies}
-    ELSE {NoDependencies}
+    ELSE
+      IF Scenario = "BatchOrder"
+      THEN {BatchOrderDependencies}
+      ELSE {NoDependencies}
 
 ReadInputs ==
   IF Scenario = "Effects"
   THEN [Tasks -> SUBSET Resources]
-  ELSE {EmptyReads}
+  ELSE
+    IF Scenario = "BatchOrder"
+    THEN {BatchOrderReads}
+    ELSE {EmptyReads}
 
 WriteInputs ==
   IF Scenario = "Effects"
   THEN [Tasks -> SUBSET Resources]
-  ELSE {EmptyWrites}
+  ELSE
+    IF Scenario = "BatchOrder"
+    THEN {BatchOrderWrites}
+    ELSE {EmptyWrites}
 
 CostInputs ==
   IF Scenario = "Resources"
@@ -489,6 +527,8 @@ Next ==
   \/ AcknowledgeCancellation
   \/ CommitNext
 
+BatchOrderNext == AcceptPlan
+
 Spec ==
   Init /\ [][Next]_vars /\ WF_vars(Next)
 
@@ -609,6 +649,10 @@ EmptyCompletionIsImmediate ==
     /\ plan = <<>>
     /\ completedResults = {}
     /\ committed = <<>>
+
+StableBatchInsertionRegression ==
+  Scenario = "BatchOrder" /\ phase # "Unvalidated" =>
+    plan = <<<<2, 4>>, <<1, 3>>>>
 
 ResultsOnlyGrow ==
   [][completedResults \subseteq completedResults']_vars

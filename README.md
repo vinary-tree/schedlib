@@ -17,6 +17,8 @@ cancellation are all decided by the verified state machine.
 The formal baseline covers:
 
 - the complete empty-schedule state machine;
+- the minimal four-task case proving stable sorted insertion when a low task
+  identifier becomes ready late;
 - all 64 nonreflexive dependency relations over three tasks;
 - all 256 read/write-set assignments in the complete two-task, two-resource
   effect-independence kernel;

@@ -24,6 +24,7 @@ family.
 | Family | Enumeration | Completeness argument |
 | --- | --- | --- |
 | Empty | one input and two reachable states | The zero-task domain has one dependency/effect/cost/outcome interpretation |
+| Batch order | one four-task regression | The smallest known late-low-identifier trace fixes the append-order boundary that three tasks do not expose |
 | Dependencies | $`2^{3(3-1)}=64`$ relations | Every directed non-self edge is independently absent or present |
 | Effects | $`(2^2)^{2+2}=256`$ maps | Two tasks are the full arity of the pairwise predicate; two resources cover all set-overlap classes |
 | Resources | $`3^3=27`$ cost maps | Each of three tasks independently takes cost one, two, or the first over-budget value three |
@@ -34,6 +35,11 @@ initial run showed redundant expansion. This does not sample the predicate:
 `Independent` consumes exactly two tasks. Full-batch use remains checked by the
 same `PlanIsCanonicalAndLawful` invariant.
 
+The batch-order family is intentionally targeted rather than presented as an
+exhaustive four-task graph/effect cross-product. Its fixed dependency and
+conflicts reproduce a generalized counterexample found during preimplementation
+review. Larger property tests vary the same boundary independently.
+
 ## Counterexample discipline
 
 Any TLC trace is treated as a specification defect until explained. The first
@@ -41,6 +47,12 @@ dependency run found that a successful terminal commit cursor advances one
 position beyond the final task while `TypeOK` allowed only task positions. The
 type invariant was corrected to include that sentinel. No behavioral predicate
 was removed or weakened.
+
+Preimplementation review then found that minimum-ready Kahn order need not be
+globally increasing. Append-only first-fit placement could therefore violate
+the existing strictly-increasing-batch invariant at four tasks. The model was
+corrected to use stable sorted insertion and gained the fixed `BatchOrder`
+regression before any scheduler code was written.
 
 An incomplete checker process is never counted as a pass. The wrapper requires
 the explicit no-error verdict, complete-state-graph depth, and zero states left
