@@ -37,6 +37,7 @@ verify_registry() {
   require_tool sort
 
   local registry="$repository_root/formal/refinement-map.tsv"
+  local rayon_registry="$repository_root/formal/rayon-refinement-map.tsv"
   local log="$evidence_directory/refinement-registry.log"
 
   {
@@ -77,6 +78,50 @@ verify_registry() {
       }
     ' "$registry"
 
+    awk -F '\t' '
+      NR == 1 {
+        if (NF != 8) {
+          print "Rayon registry header must have exactly 8 fields"
+          failed = 1
+        }
+        next
+      }
+      {
+        if (NF != 8) {
+          print "Rayon registry row " NR " must have exactly 8 fields"
+          failed = 1
+        }
+        if ($1 == "" || $4 == "" || $6 == "" || $7 == "") {
+          print "Rayon registry row " NR " has an empty normative field"
+          failed = 1
+        }
+        if (seen[$1]++) {
+          print "duplicate Rayon registry identifier: " $1
+          failed = 1
+        }
+        if ($8 != "required-before-implementation" && $8 != "accepted") {
+          print "Rayon registry row has invalid state: " $1
+          failed = 1
+        }
+        if (state == "") {
+          state = $8
+        } else if (state != $8) {
+          print "Rayon registry mixes acceptance states"
+          failed = 1
+        }
+        count++
+      }
+      END {
+        print "Rayon registry obligations: " count
+        print "Rayon registry state: " state
+        if (count != 8) {
+          print "Rayon registry must contain exactly 8 extracted obligations"
+          failed = 1
+        }
+        exit failed
+      }
+    ' "$rayon_registry"
+
     mapfile -t configured_predicates < <(
       rg --no-filename '^(INVARIANT|PROPERTY) ' \
         "$repository_root/formal/tla"/*.cfg |
@@ -86,7 +131,7 @@ verify_registry() {
 
     local predicate
     for predicate in "${configured_predicates[@]}"; do
-      if ! rg -Fq "$predicate" "$registry"; then
+      if ! rg -Fq "$predicate" "$registry" "$rayon_registry"; then
         echo "configured formal predicate is absent from registry: $predicate"
         return 1
       fi
@@ -99,6 +144,42 @@ verify_registry() {
     fi
     echo "registered TLAPS theorem: EffectIndependenceKernelIsSymmetric"
   } 2>&1 | tee "$log"
+}
+
+verify_rayon_tla() {
+  require_tool tla2sany
+  require_tool tlc
+
+  local syntax_log="$evidence_directory/tla-rayon-syntax.log"
+  (
+    cd "$repository_root/formal/tla"
+    tla2sany RayonAdapter.tla
+  ) 2>&1 | tee "$syntax_log"
+
+  local rayon_directory="$evidence_directory/tlc-RayonAdapter"
+  local rayon_log="$evidence_directory/tlc-RayonAdapter.log"
+  rm -rf "$rayon_directory"
+  mkdir -p "$rayon_directory"
+
+  set +e
+  (
+    cd "$repository_root/formal/tla"
+    tlc -workers 1 \
+      -metadir "$rayon_directory" \
+      -config RayonAdapter.cfg \
+      RayonAdapter.tla
+  ) 2>&1 | tee "$rayon_log"
+  local rayon_status="${PIPESTATUS[0]}"
+  set -e
+
+  rm -rf "$rayon_directory"
+  if [[ "$rayon_status" -ne 0 ]]; then
+    return "$rayon_status"
+  fi
+
+  rg -q '^Model checking completed\. No error has been found\.$' "$rayon_log"
+  rg -q '^The depth of the complete state graph search is ' "$rayon_log"
+  rg -q ' distinct states found, 0 states left on queue\.$' "$rayon_log"
 }
 
 verify_tla() {
@@ -139,6 +220,8 @@ verify_tla() {
     rg -q '^The depth of the complete state graph search is ' "$scenario_log"
     rg -q ' distinct states found, 0 states left on queue\.$' "$scenario_log"
   done
+
+  verify_rayon_tla
 }
 
 verify_tlaps() {
@@ -166,6 +249,10 @@ verify_tlaps() {
 }
 
 case "$verification_target" in
+  rayon)
+    verify_registry
+    verify_rayon_tla
+    ;;
   tla)
     verify_registry
     verify_tla
@@ -180,7 +267,7 @@ case "$verification_target" in
     verify_tlaps
     ;;
   *)
-    echo "usage: $0 {tla|tlaps|all}" >&2
+    echo "usage: $0 {rayon|tla|tlaps|all}" >&2
     exit 2
     ;;
 esac

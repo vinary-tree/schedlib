@@ -14,6 +14,12 @@ proves the universal effect-kernel theorem, and every one of the 68 registered
 test names passes in both debug and optimized-release builds. Six additional
 regressions bring the executed implementation suite to 74 tests.
 
+The optional Rayon adapter has its own eight-row registry at
+[`../../formal/rayon-refinement-map.tsv`](../../formal/rayon-refinement-map.tsv).
+Its rows begin at `required-before-implementation`. They advance atomically to
+`accepted` only after the parallel red baseline and every worker-count, timing,
+join, lifecycle, small-stack, and equivalence test passes.
+
 ## Test layers
 
 Exhaustive oracle tests

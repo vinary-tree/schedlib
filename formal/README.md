@@ -7,8 +7,11 @@ validation, planning, arbitrary worker completion, stable commit, failure,
 cancellation, and terminal outcomes. [`tla/SchedulerKernels.tla`](tla/SchedulerKernels.tla)
 contains the shared nonrecursive effect-independence definition and its TLAPS
 theorem.
+[`tla/RayonAdapter.tla`](tla/RayonAdapter.tla) separately specifies the
+optional parallel adapter's bounded worker set, nondeterministic physical
+completion, join barrier, and canonical returned completion vector.
 
-## Why two modules
+## Why the contract is split
 
 TLC accepts finite recursive operators used as denotational definitions.
 TLAPS' current front end does not accept recursive operator definitions in a
@@ -35,6 +38,7 @@ varies one semantic boundary:
 | `Effects.cfg` | 256 read/write assignments on two tasks and two resources | Complete pairwise independence truth kernel |
 | `Resources.cfg` | 27 task-cost maps on three tasks with budget two | Exact resource admission and exhaustion |
 | `Outcomes.cfg` | 27 outcome maps crossed with 4 cancellation counts | Failure, incomplete, cancellation, completion, and serial equivalence |
+| `RayonAdapter.cfg` | Every dispatch/completion interleaving for four tasks at worker limits 1, 2, and 4 | Exact-once bounded execution, join-before-return, worker-count-independent order, and liveness |
 
 Two tasks are sufficient for the effect family because `Independent` is a
 pairwise predicate. Two resources exhaust the empty, singleton, overlapping,
@@ -51,9 +55,16 @@ planner therefore inserts it at its sorted position rather than appending it.
 The fixed scenario proves the resulting plan is `<<2, 4>, <1, 3>>` for the
 dependency `4 -> 1` and conflict pairs `{1, 4}` and `{2, 3}`.
 
+`RayonAdapter.cfg` begins at an already accepted nonempty batch. A task moves
+monotonically from pending to active to completed. Physical completion order
+is recorded but never returned. The join transition is enabled only after all
+tasks complete and returns the canonical stable-task sequence independently of
+the selected worker limit.
+
 ## Commands
 
 ```sh
+./scripts/verify-formal.sh rayon
 ./scripts/verify-formal.sh tla
 ./scripts/verify-formal.sh tlaps
 ./scripts/verify-formal.sh all
@@ -75,3 +86,11 @@ production symbol is acceptable only when every row naming that symbol has:
 4. its complexity instrumentation where required; and
 5. an evidence-backed status change from `required-before-implementation` to
    `accepted`.
+
+[`rayon-refinement-map.tsv`](rayon-refinement-map.tsv) applies the same rule to
+the optional Rayon adapter. Its rows remain `required-before-implementation`
+until the test-only baseline fails for the missing adapter and the completed
+implementation passes every named test. The model assumes finite nonpanicking
+task callbacks: Rust panics are outside `TaskExecution` and therefore propagate
+according to Rayon rather than being misreported as typed success, failure, or
+incompleteness.
