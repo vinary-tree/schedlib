@@ -1,4 +1,4 @@
-.PHONY: render-diagrams verify-docs verify-formal verify
+.PHONY: render-diagrams verify-docs verify-formal verify-rust verify
 
 render-diagrams:
 	./scripts/render-diagrams.sh
@@ -9,4 +9,7 @@ verify-docs:
 verify-formal:
 	./scripts/verify-formal.sh all
 
-verify: verify-formal verify-docs
+verify-rust:
+	./scripts/verify-rust.sh
+
+verify: verify-formal verify-rust verify-docs

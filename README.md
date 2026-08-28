@@ -1,9 +1,11 @@
 # schedlib
 
 schedlib is the deterministic, synchronous-first scheduler foundation for the
-Vinary categorical optimization pipeline. Its current revision is deliberately
-formal-only: it defines and verifies the contract that the Rust implementation
-must refine, but contains no production scheduler code.
+Vinary categorical optimization pipeline. The production serial core refines
+the repository's TLA+ state machine and TLAPS theorem. It constructs immutable
+plans over libvgraph canonical CSR, accepts injected task or batch executors,
+and normalizes arbitrary batch completion order through stable ordered commit.
+The core requires no asynchronous runtime or thread pool.
 
 The contract separates a deterministic immutable plan from potentially
 parallel execution. Stable task identifiers determine a canonical topological
@@ -30,11 +32,23 @@ The formal baseline covers:
   symmetric.
 
 The complete 32-obligation map is machine-readable in
-[`formal/refinement-map.tsv`](formal/refinement-map.tsv). Production work may
-begin only after this formal baseline is committed. Its first change must add
-the exhaustive oracle and property tests named by that map; implementation
-follows only after those tests demonstrably fail for the missing production
-API.
+[`formal/refinement-map.tsv`](formal/refinement-map.tsv). Its 68 required test
+names are audited mechanically. The production suite also crosses validation
+precedence, sparse stable identifiers, duplicate edges, maximum-width costs,
+and effect canonicalization. Deep-chain, wide-DAG, success, failure,
+incomplete, cancellation, and destruction paths run on 64 KiB native stacks.
+
+## Use the serial core
+
+[`docs/usage/rust-api.md`](docs/usage/rust-api.md) contains a complete compiling
+example and defines the executor, cancellation, and commit contracts. In
+outline:
+
+1. construct `TaskSpec` values with stable `TaskId`, `TaskEffects`, and `Cost`;
+2. call `PlanBuilder::build` with dependencies and a positive `Budget`;
+3. inject `SerialExecutor` or another complete-batch executor; and
+4. observe only the stable prefix delivered through `CommitSink` and
+   `ExecutionReport`.
 
 ## Documentation map
 
@@ -55,6 +69,10 @@ API.
   covers cancellation and resource containment.
 - [`docs/usage/formal-workflow.md`](docs/usage/formal-workflow.md) provides the
   operator workflow.
+- [`docs/usage/rust-api.md`](docs/usage/rust-api.md) documents production API
+  construction and execution.
+- [`docs/engineering/algorithms-and-complexity.md`](docs/engineering/algorithms-and-complexity.md)
+  specifies the selected data structures and exact complexity parameters.
 
 ## Local gates
 
@@ -63,6 +81,11 @@ Run the bounded verification suite:
 ```sh
 make verify
 ```
+
+Run production acceptance with one Cargo job inside a bounded systemd scope as
+described in the [formal workflow](docs/usage/formal-workflow.md). The required
+gates include `cargo test --all-targets`, release tests, strict Clippy, Rustdoc,
+diagram rendering, `vinary-doc-lint`, and `pgmcp bug-gate`.
 
 The scripts create all generated state, logs, and temporary files beneath the
 ignored, persistent `target/` directory. Formal checks self-enter a

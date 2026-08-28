@@ -61,8 +61,8 @@ verify_registry() {
           print "duplicate registry identifier: " $1
           failed = 1
         }
-        if ($8 != "required-before-implementation") {
-          print "pre-implementation registry row has invalid state: " $1
+        if ($8 != "accepted") {
+          print "refinement registry row is not accepted: " $1
           failed = 1
         }
         count++

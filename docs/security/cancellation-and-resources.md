@@ -35,6 +35,13 @@ become observable. An adapter must stop launching new work once cancellation is
 requested, join or safely detach work according to its runtime contract, and
 drop unpublished results without recursive destruction.
 
+The `Cancellation` trait is observed at canonical committed-prefix boundaries
+before dispatch and before each publication. Implementations must be monotone:
+once `requested` returns true it remains true. `CancelAfter` is the
+deterministic reference policy; `NeverCancel` is the identity policy. An
+external runtime can wrap an atomic flag while preserving the same boundary
+contract.
+
 ## Failure ordering
 
 A worker finishing with failure or an incomplete reason does not immediately

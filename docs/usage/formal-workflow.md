@@ -14,7 +14,7 @@ Use a focused command while editing a model:
 ./scripts/verify-formal.sh tlaps
 ```
 
-`tla` parses both modules and runs all four TLC configurations. `tlaps` proves
+`tla` parses both modules and runs all six TLC configurations. `tlaps` proves
 the shared nonrecursive kernel theorem.
 
 ## Run the acceptance suite
@@ -23,8 +23,12 @@ the shared nonrecursive kernel theorem.
 make verify
 ```
 
-The formal wrapper enters its own bounded systemd scope. Documentation diagrams
-are rendered headlessly and then checked online by `vinary-doc-lint`.
+The formal, Rust, and documentation wrappers enter their own bounded systemd
+scopes with swap disabled and repository-backed temporary directories. The
+Rust gate uses one Cargo job and runs formatting, all-target checks, strict
+Clippy, debug tests, release tests, doctests, and warning-denied Rustdoc.
+Documentation diagrams are rendered headlessly and then checked by
+`vinary-doc-lint`.
 
 ## Inspect evidence
 
@@ -34,11 +38,13 @@ Review these files before cleanup:
 | --- | --- |
 | TLA+ syntax | `target/verification/tla-syntax.log` |
 | Empty model | `target/verification/tlc-Empty.log` |
+| Batch-order model | `target/verification/tlc-BatchOrder.log` |
 | Dependency model | `target/verification/tlc-Dependencies.log` |
 | Effect model | `target/verification/tlc-Effects.log` |
 | Resource model | `target/verification/tlc-Resources.log` |
 | Outcome model | `target/verification/tlc-Outcomes.log` |
 | TLAPS proof | `target/verification/tlaps.log` |
+| Rust acceptance | `target/acceptance/*.log` |
 | Diagram rendering | `target/documentation/render-diagrams.log` |
 | Documentation lint | `target/documentation/vinary-doc-lint.log` |
 

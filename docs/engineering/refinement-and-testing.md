@@ -2,15 +2,17 @@
 
 ## No-code-before-contract rule
 
-The formal baseline precedes production code. At the start of the serial-core
-task, the test crate and independent reference oracle must be added first.
-Those tests must initially fail because the production API does not yet exist.
-Only then may the implementation be introduced.
+The formal baseline preceded production code. The test crate and independent
+reference oracle were committed next and demonstrated a missing-production
+compile failure. Only after that red baseline did the serial implementation
+begin. The repository history preserves this ordering.
 
 [`../../formal/refinement-map.tsv`](../../formal/refinement-map.tsv) names every
-required test and implementation obligation. A row remains open until evidence
-shows that all named tests pass and the implementation preserves its formal
-predicate.
+required test and implementation obligation. All 32 rows are now `accepted`:
+the six TLC configurations reach an empty state queue without an error, TLAPS
+proves the universal effect-kernel theorem, and every one of the 68 registered
+test names passes in both debug and optimized-release builds. Six additional
+regressions bring the executed implementation suite to 74 tests.
 
 ## Test layers
 
@@ -65,10 +67,12 @@ $`O((V+E)\log V)`$ work or better and $`O(V+E)`$ auxiliary storage.
 Execution after planning must use $`O(V+E)`$ scheduler work plus caller task
 work.
 
-The batch-conflict index requires its own documented bound before
-implementation because the best representation depends on resource-identifier
-density. The accepted design must avoid scanning all earlier tasks for every
-placement and must include operation-count evidence for its selected index.
+The accepted batch index combines a preallocated max-capacity segment tree with
+sparse aggregate read/write hash sets. A segment query skips every contiguous
+subtree whose maximum remaining capacity is too small. Only capacity-admissible
+candidates incur sparse effect membership checks. The complete parameterized
+bound and operation counters are specified in
+[Algorithms and complexity](algorithms-and-complexity.md).
 
 Overall scheduler auxiliary storage is bounded by:
 

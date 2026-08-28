@@ -16,11 +16,15 @@ it.
    phase and transition.
 5. [Evidence method](scientific/evidence-method.md) explains what the bounded
    exhaustive checks establish and what they do not.
-6. [Refinement and testing](engineering/refinement-and-testing.md) translates
-   every formal invariant into pre-implementation tests and acceptance gates.
-7. [Cancellation and resources](security/cancellation-and-resources.md)
+6. [Algorithms and complexity](engineering/algorithms-and-complexity.md)
+   explains the selected stack-safe data structures and exact bounds.
+7. [Refinement and testing](engineering/refinement-and-testing.md) translates
+   every formal invariant into preimplementation tests and acceptance gates.
+8. [Cancellation and resources](security/cancellation-and-resources.md)
    defines containment guarantees.
-8. [Formal workflow](usage/formal-workflow.md) gives reproducible commands and
+9. [Rust API](usage/rust-api.md) gives a complete construction and execution
+   example.
+10. [Formal workflow](usage/formal-workflow.md) gives reproducible commands and
    evidence locations.
 
 ## Diagram index

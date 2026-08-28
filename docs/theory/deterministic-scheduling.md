@@ -78,10 +78,10 @@ CANONICAL-TOPOLOGY(tasks, outgoing, indegree)
     RETURN order
 ```
 
-The production algorithm must be iterative. With adjacency lists and a binary
-min-heap its work is $`O((|\mathcal{T}|+|D|)\log|\mathcal{T}|)`$; a future
-integer-identifier specialization may improve the ready-set bound without
-altering semantics.
+The production algorithm is iterative. libvgraph provides forward and reverse
+CSR, while schedlib uses a binary min-heap for the ready set. Its work is
+$`O((|\mathcal{T}|+|D|)\log|\mathcal{T}|)`$. Exact vertex, edge, ready-push,
+and ready-pop counts are exposed through `PlanWorkProfile`.
 
 ## Deterministic first-fit batches
 

@@ -1,6 +1,7 @@
 # Formal scheduler contract
 
-This directory is the normative pre-implementation contract for schedlib.
+This directory is the normative contract that preceded and continues to govern
+schedlib's production implementation.
 [`tla/DeterministicScheduler.tla`](tla/DeterministicScheduler.tla) specifies
 validation, planning, arbitrary worker completion, stable commit, failure,
 cancellation, and terminal outcomes. [`tla/SchedulerKernels.tla`](tla/SchedulerKernels.tla)

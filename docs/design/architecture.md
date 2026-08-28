@@ -23,7 +23,9 @@ Input snapshot
 
 Plan builder
 : Performs exact validation, canonical topology, dependency-floor calculation,
-  and deterministic first-fit placement. It publishes either one immutable plan
+  and deterministic first-fit placement. libvgraph owns canonical forward and
+  reverse CSR. A max-capacity segment tree skips inadmissible batches; sparse
+  aggregate effect sets reject hazards. It publishes either one immutable plan
   or one rejection.
 
 Serial executor
@@ -32,9 +34,9 @@ Serial executor
 
 Parallel adapter
 : Optional executor that dispatches one independent batch to a runtime. It may
-  receive completions in any order but cannot bypass ordered commit. The first
-  adapter is planned as a Rayon-backed feature after the serial core is
-  accepted.
+  receive completions in any order but cannot bypass ordered commit. Runtime
+  adapters implement `BatchExecutor`; schedlib's core neither selects nor
+  initializes their thread or asynchronous runtime.
 
 Ordered commit machine
 : The sole publication boundary. It converts an unordered completed-result set
@@ -47,10 +49,12 @@ Consumer
 
 ## Data ownership
 
-The plan is immutable after validation. Execution state contains only indices,
-an internal result store, and cancellation state. Production APIs must prevent
-workers from mutating plan or input metadata. Results move exactly once from
-the internal store to the ordered commit sink.
+The plan is immutable after validation. It owns the task snapshot, libvgraph
+CSR, stable-ID index, batch locations, and work profile. Execution state
+contains only an indexed current-batch result store, an append-only committed
+prefix, explicit cursors, and cancellation observation. Borrowed `TaskView` and
+`BatchView` values prevent workers from mutating plan metadata. Results move
+exactly once from the internal store to the ordered commit sink.
 
 ## Why schedlib is independent
 

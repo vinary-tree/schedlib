@@ -4,14 +4,26 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::thread;
 
 use schedlib::{
-    BatchExecutor, BatchView, Budget, CancelAfter, Cancellation, CommitSink, CommittedTask,
-    ControlModel, Cost, EffectSet, ExecutionPhase, NeverCancel, Plan, PlanBuilder, PlanError,
-    ResourceId, SerialExecutor, TaskCompletion, TaskEffects, TaskExecution, TaskExecutor, TaskId,
-    TaskSpec, TaskView,
+    BatchExecutor, BatchView, Budget, CancelAfter, CommitSink, CommittedTask, ControlModel, Cost,
+    EffectSet, ExecutionPhase, NeverCancel, Plan, PlanBuilder, PlanError, ResourceId,
+    SerialExecutor, TaskCompletion, TaskEffects, TaskExecution, TaskExecutor, TaskId, TaskSpec,
+    TaskView,
 };
 
 fn rid(value: u32) -> ResourceId {
     ResourceId::new(value)
+}
+
+fn u32_index(value: usize) -> u32 {
+    u32::try_from(value).expect("refinement domain must fit a stable u32 identifier")
+}
+
+fn u32_sample(value: u64) -> u32 {
+    u32::try_from(value).expect("bounded random sample must fit u32")
+}
+
+fn u64_count(value: usize) -> u64 {
+    u64::try_from(value).expect("refinement collection length must fit u64")
 }
 
 fn effects(reads: &[u32], writes: &[u32]) -> TaskEffects {
@@ -91,11 +103,9 @@ fn reference_topology(task_count: usize, edges: &[(TaskId, TaskId)]) -> Option<V
                     .iter()
                     .all(|(source, target)| target.index() != *candidate || emitted[source.index()])
         });
-        let Some(next) = next else {
-            return None;
-        };
+        let next = next?;
         emitted[next] = true;
-        order.push(TaskId::new(next as u32));
+        order.push(TaskId::new(u32_index(next)));
     }
     Some(order)
 }
@@ -109,6 +119,49 @@ fn reference_independent(left: &TaskEffects, right: &TaskEffects) -> bool {
         && left_writes.is_disjoint(&right_writes)
         && right_writes.is_disjoint(&left_reads)
         && right_writes.is_disjoint(&left_writes)
+}
+
+fn reference_plan(
+    tasks: &[TaskSpec<u32>],
+    edges: &[(TaskId, TaskId)],
+    budget: u64,
+) -> Option<Vec<Vec<TaskId>>> {
+    if tasks.iter().any(|task| task.cost().get() > budget) {
+        return None;
+    }
+    let order = reference_topology(tasks.len(), edges)?;
+    let task_by_id: BTreeMap<_, _> = tasks.iter().map(|task| (task.id(), task)).collect();
+    let mut batches: Vec<Vec<TaskId>> = Vec::new();
+    let mut batch_of = vec![usize::MAX; tasks.len()];
+
+    for task_id in order {
+        let task = task_by_id.get(&task_id)?;
+        let floor = edges
+            .iter()
+            .filter_map(|(source, target)| (*target == task_id).then_some(batch_of[source.index()]))
+            .max()
+            .map_or(0, |batch| batch + 1);
+        let target = (floor..batches.len()).find(|batch_index| {
+            let batch = &batches[*batch_index];
+            let cost = batch.iter().fold(task.cost().get(), |total, member| {
+                total + task_by_id[member].cost().get()
+            });
+            cost <= budget
+                && batch.iter().all(|member| {
+                    reference_independent(task.effects(), task_by_id[member].effects())
+                })
+        });
+        let batch_index = target.unwrap_or_else(|| {
+            batches.push(Vec::new());
+            batches.len() - 1
+        });
+        let position = batches[batch_index]
+            .binary_search(&task_id)
+            .unwrap_or_else(core::convert::identity);
+        batches[batch_index].insert(position, task_id);
+        batch_of[task_id.index()] = batch_index;
+    }
+    Some(batches)
 }
 
 fn assert_plan_invariants(plan: &Plan<u32>, dependencies: &[(TaskId, TaskId)]) {
@@ -189,7 +242,13 @@ impl TaskExecutor<u32> for OutcomeTaskExecutor {
 
 struct PermutingBatchExecutor {
     outcomes: BTreeMap<TaskId, TaskExecution<u32, u32, u32>>,
-    reverse: bool,
+    order: CompletionOrder,
+}
+
+enum CompletionOrder {
+    Canonical,
+    Reverse,
+    Explicit(Vec<TaskId>),
 }
 
 impl BatchExecutor<u32> for PermutingBatchExecutor {
@@ -198,8 +257,11 @@ impl BatchExecutor<u32> for PermutingBatchExecutor {
     type Incomplete = u32;
 
     fn execute_batch(&mut self, batch: BatchView<'_, u32>) -> Vec<TaskCompletion<u32, u32, u32>> {
-        let mut ids = batch.task_ids().to_vec();
-        if self.reverse {
+        let mut ids = match &self.order {
+            CompletionOrder::Canonical | CompletionOrder::Reverse => batch.task_ids().to_vec(),
+            CompletionOrder::Explicit(order) => order.clone(),
+        };
+        if matches!(&self.order, CompletionOrder::Reverse) {
             ids.reverse();
         }
         ids.into_iter()
@@ -215,6 +277,33 @@ impl BatchExecutor<u32> for PermutingBatchExecutor {
     }
 }
 
+fn completion_permutations(ids: &[TaskId]) -> Vec<Vec<TaskId>> {
+    let mut current = ids.to_vec();
+    let mut permutations = Vec::new();
+    loop {
+        permutations.push(current.clone());
+        if !next_permutation(&mut current) {
+            return permutations;
+        }
+    }
+}
+
+fn next_permutation<T: Ord>(values: &mut [T]) -> bool {
+    let Some(pivot) = (0..values.len().saturating_sub(1))
+        .rev()
+        .find(|index| values[*index] < values[*index + 1])
+    else {
+        return false;
+    };
+    let successor = (pivot + 1..values.len())
+        .rev()
+        .find(|index| values[pivot] < values[*index])
+        .expect("a lexicographic successor must exist after the pivot");
+    values.swap(pivot, successor);
+    values[pivot + 1..].reverse();
+    true
+}
+
 fn success_outcomes(task_count: u32) -> BTreeMap<TaskId, TaskExecution<u32, u32, u32>> {
     (0..task_count)
         .map(|id| (TaskId::new(id), TaskExecution::Success(id)))
@@ -223,7 +312,7 @@ fn success_outcomes(task_count: u32) -> BTreeMap<TaskId, TaskExecution<u32, u32,
 
 fn execute_success(plan: &Plan<u32>) -> (ExecutionPhase, Vec<TaskId>, usize) {
     let worker = OutcomeTaskExecutor {
-        outcomes: success_outcomes(plan.task_count() as u32),
+        outcomes: success_outcomes(u32_index(plan.task_count())),
         calls: 0,
     };
     let mut executor = SerialExecutor::new(worker);
@@ -294,7 +383,8 @@ fn prop_empty_schedule_is_identity() {
 
 #[test]
 fn prop_input_snapshot_never_changes() {
-    let plan = build_plan(vec![task(0, 1, &[1], &[2])], Vec::new(), 1).unwrap();
+    let plan = build_plan(vec![task(0, 1, &[1], &[2])], Vec::new(), 1)
+        .expect("refinement fixture must satisfy its construction invariant");
     let before = format!("{plan:?}");
     let _ = execute_success(&plan);
     assert_eq!(format!("{plan:?}"), before);
@@ -303,11 +393,12 @@ fn prop_input_snapshot_never_changes() {
 #[test]
 fn metamorphic_mutating_source_after_build_has_no_effect() {
     let mut source = vec![task(0, 1, &[], &[])];
-    let plan = build_plan(source.clone(), Vec::new(), 1).unwrap();
+    let plan = build_plan(source.clone(), Vec::new(), 1)
+        .expect("refinement fixture must satisfy its construction invariant");
     source[0] = task(0, 1, &[99], &[99]);
     assert!(plan
         .task(TaskId::new(0))
-        .unwrap()
+        .expect("refinement fixture must satisfy its construction invariant")
         .effects()
         .reads()
         .is_empty());
@@ -366,7 +457,7 @@ fn prop_exhausted_iff_any_cost_exceeds_budget() {
         let tasks = costs
             .iter()
             .enumerate()
-            .map(|(id, cost)| task(id as u32, *cost, &[], &[]))
+            .map(|(id, cost)| task(u32_index(id), *cost, &[], &[]))
             .collect();
         let rejected = build_plan(tasks, Vec::new(), budget).is_err();
         assert_eq!(rejected, costs.iter().any(|cost| *cost > budget));
@@ -397,6 +488,105 @@ fn prop_rejection_has_zero_observable_effects() {
 }
 
 #[test]
+fn cycle_rejection_precedes_resource_exhaustion() {
+    let cycle = vec![
+        (TaskId::new(0), TaskId::new(1)),
+        (TaskId::new(1), TaskId::new(0)),
+    ];
+    assert!(matches!(
+        build_plan(three_tasks([4, 4, 4]), cycle, 1),
+        Err(PlanError::Cyclic)
+    ));
+}
+
+#[test]
+fn duplicate_and_unknown_task_inputs_are_rejected_atomically() {
+    assert!(matches!(
+        build_plan(
+            vec![task(7, 1, &[], &[]), task(7, 1, &[], &[])],
+            Vec::new(),
+            1,
+        ),
+        Err(PlanError::DuplicateTaskId { task }) if task == TaskId::new(7)
+    ));
+    assert!(matches!(
+        build_plan(
+            vec![task(7, 1, &[], &[])],
+            vec![(TaskId::new(7), TaskId::new(9))],
+            1,
+        ),
+        Err(PlanError::Graph(_))
+    ));
+}
+
+#[test]
+fn sparse_stable_identifiers_use_dense_internal_storage() {
+    let plan = build_plan(
+        vec![
+            task(u32::MAX, 1, &[], &[]),
+            task(7, 1, &[], &[]),
+            task(100_000, 1, &[], &[]),
+        ],
+        vec![(TaskId::new(7), TaskId::new(u32::MAX))],
+        3,
+    )
+    .expect("sparse stable identifiers must be representable through dense CSR");
+    assert_eq!(
+        plan.canonical_order(),
+        vec![TaskId::new(7), TaskId::new(100_000), TaskId::new(u32::MAX),]
+    );
+    assert!(
+        plan.batch_index(TaskId::new(7)).expect("source is planned")
+            < plan
+                .batch_index(TaskId::new(u32::MAX))
+                .expect("target is planned")
+    );
+}
+
+#[test]
+fn duplicate_dependencies_are_canonicalized_once() {
+    let edge = (TaskId::new(0), TaskId::new(1));
+    let plan = build_plan(
+        vec![task(0, 1, &[], &[]), task(1, 1, &[], &[])],
+        vec![edge, edge, edge],
+        2,
+    )
+    .expect("duplicate relation inputs denote one set edge");
+    assert_eq!(plan.dependency_graph().edge_count(), 1);
+    assert_eq!(plan.work_profile().edges(), 1);
+    assert_eq!(plan.work_profile().topology_edge_visits(), 1);
+}
+
+#[test]
+fn maximum_costs_cannot_overflow_batch_arithmetic() {
+    let plan = build_plan(
+        vec![task(0, u64::MAX, &[], &[]), task(1, u64::MAX, &[], &[])],
+        Vec::new(),
+        u64::MAX,
+    )
+    .expect("each maximum-cost task fits its own maximum-budget batch");
+    assert_eq!(plan.batches().len(), 2);
+    assert!(plan
+        .batches()
+        .iter()
+        .all(|batch| batch.total_cost().get() == u64::MAX));
+}
+
+#[test]
+fn effect_sets_canonicalize_duplicates_without_recursive_sort() {
+    let set = EffectSet::from_resources([
+        ResourceId::new(9),
+        ResourceId::new(1),
+        ResourceId::new(9),
+        ResourceId::new(4),
+    ]);
+    assert_eq!(
+        set.as_slice(),
+        [ResourceId::new(1), ResourceId::new(4), ResourceId::new(9)]
+    );
+}
+
+#[test]
 fn exhaustive_canonical_topological_order() {
     for mask in 0..64 {
         let edges = edges_from_mask(3, mask);
@@ -421,13 +611,13 @@ fn prop_ready_permutation_invariant() {
         dependencies.clone(),
         4,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let reverse = build_plan(
         (0..4).rev().map(|id| task(id, 1, &[], &[])).collect(),
         dependencies.into_iter().rev().collect(),
         4,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(forward.canonical_order(), reverse.canonical_order());
     assert_eq!(forward.batch_task_ids(), reverse.batch_task_ids());
 }
@@ -436,8 +626,15 @@ fn prop_ready_permutation_invariant() {
 fn exhaustive_plan_matches_reference() {
     for mask in 0..64 {
         let dependencies = edges_from_mask(3, mask);
-        if let Ok(plan) = build_plan(three_tasks([1, 1, 1]), dependencies.clone(), 2) {
-            assert_plan_invariants(&plan, &dependencies);
+        let tasks = three_tasks([1, 1, 1]);
+        let expected = reference_plan(&tasks, &dependencies, 2);
+        match (expected, build_plan(tasks, dependencies.clone(), 2)) {
+            (Some(expected), Ok(plan)) => {
+                assert_eq!(plan.batch_task_ids(), expected);
+                assert_plan_invariants(&plan, &dependencies);
+            }
+            (None, Err(PlanError::Cyclic)) => {}
+            pair => panic!("reference-plan disagreement for mask {mask}: {pair:?}"),
         }
     }
 }
@@ -454,13 +651,13 @@ fn prop_repeated_build_is_identical() {
             dependencies.clone(),
             3,
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         let right = build_plan(
             (0..4).rev().map(|id| task(id, 1, &[id % 2], &[])).collect(),
             dependencies,
             3,
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         assert_eq!(left.batch_task_ids(), right.batch_task_ids());
     }
 }
@@ -472,7 +669,7 @@ fn exhaustive_plan_exact_cover() {
         Vec::new(),
         3,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(plan.flattened_task_ids().len(), 8);
     assert_eq!(
         plan.flattened_task_ids()
@@ -492,7 +689,7 @@ fn prop_no_omission_or_duplication() {
             Vec::new(),
             8,
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         assert_eq!(
             plan.flattened_task_ids(),
             (0..count).map(TaskId::new).collect::<Vec<_>>()
@@ -507,7 +704,7 @@ fn exhaustive_batch_order() {
         Vec::new(),
         5,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     assert!(plan
         .batches()
         .iter()
@@ -553,7 +750,7 @@ fn prop_batch_ids_strictly_increase() {
             Vec::new(),
             seed % 8 + 1,
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         assert!(plan
             .batches()
             .iter()
@@ -572,13 +769,25 @@ fn exhaustive_effect_kernel() {
         let right = effects(&subset(4), &subset(6));
         let plan = build_plan(
             vec![
-                TaskSpec::new(TaskId::new(0), 0, left.clone(), Cost::new(1).unwrap()),
-                TaskSpec::new(TaskId::new(1), 1, right.clone(), Cost::new(1).unwrap()),
+                TaskSpec::new(
+                    TaskId::new(0),
+                    0,
+                    left.clone(),
+                    Cost::new(1)
+                        .expect("refinement fixture must satisfy its construction invariant"),
+                ),
+                TaskSpec::new(
+                    TaskId::new(1),
+                    1,
+                    right.clone(),
+                    Cost::new(1)
+                        .expect("refinement fixture must satisfy its construction invariant"),
+                ),
             ],
             Vec::new(),
             2,
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         assert_eq!(
             plan.batches().len() == 1,
             reference_independent(&left, &right)
@@ -591,9 +800,17 @@ fn prop_batch_members_are_pairwise_independent() {
     for seed in 0..64 {
         let mut rng = Lcg::new(seed);
         let tasks = (0..24)
-            .map(|id| task(id, 1, &[rng.range(8) as u32], &[rng.range(8) as u32]))
+            .map(|id| {
+                task(
+                    id,
+                    1,
+                    &[u32_sample(rng.range(8))],
+                    &[u32_sample(rng.range(8))],
+                )
+            })
             .collect();
-        let plan = build_plan(tasks, Vec::new(), 24).unwrap();
+        let plan = build_plan(tasks, Vec::new(), 24)
+            .expect("refinement fixture must satisfy its construction invariant");
         assert_plan_invariants(&plan, &[]);
     }
 }
@@ -618,8 +835,8 @@ fn exhaustive_effect_symmetry() {
 fn prop_independence_is_symmetric() {
     for seed in 0..256 {
         let mut rng = Lcg::new(seed);
-        let left = effects(&[rng.range(16) as u32], &[rng.range(16) as u32]);
-        let right = effects(&[rng.range(16) as u32], &[rng.range(16) as u32]);
+        let left = effects(&[u32_sample(rng.range(16))], &[u32_sample(rng.range(16))]);
+        let right = effects(&[u32_sample(rng.range(16))], &[u32_sample(rng.range(16))]);
         assert_eq!(
             left.prove_independent(&right).is_some(),
             right.prove_independent(&left).is_some()
@@ -651,7 +868,8 @@ fn prop_batch_cost_never_exceeds_budget() {
         let tasks = (0..64)
             .map(|id| task(id, rng.range(8) + 1, &[], &[]))
             .collect();
-        let plan = build_plan(tasks, Vec::new(), 8).unwrap();
+        let plan = build_plan(tasks, Vec::new(), 8)
+            .expect("refinement fixture must satisfy its construction invariant");
         assert!(plan
             .batches()
             .iter()
@@ -678,9 +896,9 @@ fn prop_edge_implies_strict_batch_order() {
         let plan = build_plan(
             (0..count).map(|id| task(id, 1, &[], &[])).collect(),
             edges.clone(),
-            count as u64,
+            u64::from(count),
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         assert_plan_invariants(&plan, &edges);
     }
 }
@@ -706,7 +924,7 @@ fn exhaustive_completion_domain() {
         Vec::new(),
         2,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     for completions in [
         vec![TaskCompletion::new(
             TaskId::new(9),
@@ -741,7 +959,7 @@ fn exhaustive_commit_barrier() {
         Vec::new(),
         2,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let mut executor = InvalidExecutor {
         completions: vec![TaskCompletion::new(
             TaskId::new(1),
@@ -766,7 +984,7 @@ fn exhaustive_result_growth() {
         Vec::new(),
         8,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let (_, ids, _) = execute_success(&plan);
     for prefix in ids.windows(2) {
         assert!(prefix[0] < prefix[1]);
@@ -795,15 +1013,17 @@ fn exhaustive_completion_permutations() {
         Vec::new(),
         4,
     )
-    .unwrap();
-    for reverse in [false, true] {
+    .expect("refinement fixture must satisfy its construction invariant");
+    for order in completion_permutations(plan.batches()[0].task_ids()) {
         let mut executor = PermutingBatchExecutor {
             outcomes: success_outcomes(4),
-            reverse,
+            order: CompletionOrder::Explicit(order),
         };
         let mut cancel = NeverCancel;
         let mut sink = RecordingSink::default();
-        let report = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+        let report = plan
+            .execute(&mut executor, &mut cancel, &mut sink)
+            .expect("refinement fixture must satisfy its construction invariant");
         assert_eq!(report.phase(), ExecutionPhase::Completed);
         assert_eq!(sink.ids, plan.flattened_task_ids());
     }
@@ -821,7 +1041,7 @@ fn exhaustive_single_step_commit() {
         Vec::new(),
         4,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let (_, ids, _) = execute_success(&plan);
     assert_eq!(ids, plan.flattened_task_ids());
 }
@@ -837,11 +1057,18 @@ fn exhaustive_committed_predecessors() {
         (TaskId::new(0), TaskId::new(2)),
         (TaskId::new(1), TaskId::new(2)),
     ];
-    let plan = build_plan(three_tasks([1, 1, 1]), edges.clone(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), edges.clone(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
     let (_, committed, _) = execute_success(&plan);
     for (source, target) in edges {
-        let source_position = committed.iter().position(|id| *id == source).unwrap();
-        let target_position = committed.iter().position(|id| *id == target).unwrap();
+        let source_position = committed
+            .iter()
+            .position(|id| *id == source)
+            .expect("refinement fixture must satisfy its construction invariant");
+        let target_position = committed
+            .iter()
+            .position(|id| *id == target)
+            .expect("refinement fixture must satisfy its construction invariant");
         assert!(source_position < target_position);
     }
 }
@@ -855,9 +1082,9 @@ fn prop_commit_respects_transitive_dependencies() {
     let plan = build_plan(
         (0..count).map(|id| task(id, 1, &[], &[])).collect(),
         edges,
-        count as u64,
+        u64::from(count),
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(
         execute_success(&plan).1,
         (0..count).map(TaskId::new).collect::<Vec<_>>()
@@ -880,15 +1107,16 @@ fn ternary_outcomes(mut encoded: u32) -> BTreeMap<TaskId, TaskExecution<u32, u32
 
 fn expected_phase_and_len(encoded: u32, cancel_after: usize) -> (ExecutionPhase, usize) {
     let outcomes = ternary_outcomes(encoded);
-    let first_non_success =
-        (0..3).find(|id| !matches!(outcomes[&TaskId::new(*id)], TaskExecution::Success(_)));
-    if cancel_after < first_non_success.unwrap_or(3) as usize && cancel_after < 3 {
+    let first_non_success = (0..3)
+        .find(|id| !matches!(outcomes[&TaskId::new(*id)], TaskExecution::Success(_)))
+        .map(|id| id as usize + 1);
+    if cancel_after < first_non_success.unwrap_or(4) && cancel_after < 3 {
         return (ExecutionPhase::Cancelled, cancel_after);
     }
     match first_non_success {
-        Some(id) => match outcomes[&TaskId::new(id)] {
-            TaskExecution::Failure(_) => (ExecutionPhase::Failed, id as usize + 1),
-            TaskExecution::Incomplete(_) => (ExecutionPhase::Incomplete, id as usize + 1),
+        Some(position) => match outcomes[&TaskId::new(u32_index(position - 1))] {
+            TaskExecution::Failure(_) => (ExecutionPhase::Failed, position),
+            TaskExecution::Incomplete(_) => (ExecutionPhase::Incomplete, position),
             TaskExecution::Success(_) => unreachable!(),
         },
         None => (ExecutionPhase::Completed, 3),
@@ -897,17 +1125,21 @@ fn expected_phase_and_len(encoded: u32, cancel_after: usize) -> (ExecutionPhase,
 
 #[test]
 fn exhaustive_outcomes_and_completion_orders() {
-    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
+    let completion_orders = completion_permutations(plan.batches()[0].task_ids());
     for encoded in 0..27 {
         for cancel_after in 0..=3 {
-            for reverse in [false, true] {
+            for completion_order in &completion_orders {
                 let mut executor = PermutingBatchExecutor {
                     outcomes: ternary_outcomes(encoded),
-                    reverse,
+                    order: CompletionOrder::Explicit(completion_order.clone()),
                 };
                 let mut cancel = CancelAfter::new(cancel_after);
                 let mut sink = RecordingSink::default();
-                let report = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+                let report = plan
+                    .execute(&mut executor, &mut cancel, &mut sink)
+                    .expect("refinement fixture must satisfy its construction invariant");
                 let expected = expected_phase_and_len(encoded, cancel_after);
                 assert_eq!((report.phase(), report.committed().len()), expected);
                 assert_eq!(sink.ids, plan.flattened_task_ids()[..expected.1]);
@@ -918,16 +1150,19 @@ fn exhaustive_outcomes_and_completion_orders() {
 
 #[test]
 fn prop_first_failure_is_terminal() {
-    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
     let mut outcomes = success_outcomes(3);
     outcomes.insert(TaskId::new(1), TaskExecution::Failure(99));
     let mut executor = PermutingBatchExecutor {
         outcomes,
-        reverse: true,
+        order: CompletionOrder::Reverse,
     };
     let mut cancel = NeverCancel;
     let mut sink = RecordingSink::default();
-    let report = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+    let report = plan
+        .execute(&mut executor, &mut cancel, &mut sink)
+        .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(report.phase(), ExecutionPhase::Failed);
     assert_eq!(sink.ids, vec![TaskId::new(0), TaskId::new(1)]);
 }
@@ -939,19 +1174,26 @@ fn exhaustive_incomplete_outcomes() {
 
 #[test]
 fn prop_first_incomplete_is_terminal() {
-    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
     let mut outcomes = success_outcomes(3);
     outcomes.insert(TaskId::new(1), TaskExecution::Incomplete(77));
     let mut executor = PermutingBatchExecutor {
         outcomes,
-        reverse: true,
+        order: CompletionOrder::Reverse,
     };
     let mut cancel = NeverCancel;
     let mut sink = RecordingSink::default();
-    let report = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+    let report = plan
+        .execute(&mut executor, &mut cancel, &mut sink)
+        .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(report.phase(), ExecutionPhase::Incomplete);
     assert_eq!(
-        report.committed().last().unwrap().outcome(),
+        report
+            .committed()
+            .last()
+            .expect("refinement fixture must satisfy its construction invariant")
+            .outcome(),
         &TaskExecution::Incomplete(77)
     );
 }
@@ -963,15 +1205,18 @@ fn exhaustive_outcomes_cancel_boundaries() {
 
 #[test]
 fn prop_cancel_never_splits_a_commit() {
-    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
     for boundary in 0..=3 {
         let mut executor = PermutingBatchExecutor {
             outcomes: success_outcomes(3),
-            reverse: false,
+            order: CompletionOrder::Canonical,
         };
         let mut cancel = CancelAfter::new(boundary);
         let mut sink = RecordingSink::default();
-        let report = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+        let report = plan
+            .execute(&mut executor, &mut cancel, &mut sink)
+            .expect("refinement fixture must satisfy its construction invariant");
         assert_eq!(report.committed().len(), boundary);
     }
 }
@@ -1014,7 +1259,7 @@ fn prop_progress_measure_strictly_decreases() {
         Vec::new(),
         8,
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let report = {
         let worker = OutcomeTaskExecutor {
             outcomes: success_outcomes(128),
@@ -1023,7 +1268,8 @@ fn prop_progress_measure_strictly_decreases() {
         let mut executor = SerialExecutor::new(worker);
         let mut cancel = NeverCancel;
         let mut sink = RecordingSink::default();
-        plan.execute(&mut executor, &mut cancel, &mut sink).unwrap()
+        plan.execute(&mut executor, &mut cancel, &mut sink)
+            .expect("refinement fixture must satisfy its construction invariant")
     };
     assert_eq!(report.work_profile().tasks_dispatched(), 128);
     assert_eq!(report.work_profile().commits(), 128);
@@ -1043,9 +1289,9 @@ fn run_small_stack(task_count: u32, chain: bool) {
             let plan = build_plan(
                 (0..task_count).map(|id| task(id, 1, &[], &[])).collect(),
                 edges,
-                task_count.max(1) as u64,
+                u64::from(task_count.max(1)),
             )
-            .unwrap();
+            .expect("refinement fixture must satisfy its construction invariant");
             assert_eq!(execute_success(&plan).0, ExecutionPhase::Completed);
             drop(plan);
         })
@@ -1071,7 +1317,8 @@ fn prop_no_recursive_drop() {
 
 #[test]
 fn pda_reference_oracle() {
-    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3).unwrap();
+    let plan = build_plan(three_tasks([1, 1, 1]), Vec::new(), 3)
+        .expect("refinement fixture must satisfy its construction invariant");
     assert_eq!(plan.control_model(), ControlModel::FlatIterative);
 }
 
@@ -1097,15 +1344,15 @@ fn operation_count_topology() {
     let plan = build_plan(
         (0..count).map(|id| task(id, 1, &[], &[])).collect(),
         edges.clone(),
-        count as u64,
+        u64::from(count),
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     let work = plan.work_profile();
-    assert_eq!(work.vertices(), count as u64);
-    assert_eq!(work.edges(), edges.len() as u64);
-    assert_eq!(work.topology_edge_visits(), edges.len() as u64);
-    assert_eq!(work.ready_pops(), count as u64);
-    assert_eq!(work.ready_pushes(), count as u64);
+    assert_eq!(work.vertices(), u64::from(count));
+    assert_eq!(work.edges(), u64_count(edges.len()));
+    assert_eq!(work.topology_edge_visits(), u64_count(edges.len()));
+    assert_eq!(work.ready_pops(), u64::from(count));
+    assert_eq!(work.ready_pushes(), u64::from(count));
 }
 
 #[test]
@@ -1119,9 +1366,9 @@ fn benchmark_scaling_slope() {
         let plan = build_plan(
             (0..count).map(|id| task(id, 1, &[], &[])).collect(),
             Vec::new(),
-            count as u64,
+            u64::from(count),
         )
-        .unwrap();
+        .expect("refinement fixture must satisfy its construction invariant");
         plan.work_profile().logical_work()
     };
     let small = build(512);
@@ -1138,11 +1385,12 @@ fn prop_capacity_bounds() {
     let plan = build_plan(
         (0..count).map(|id| task(id, 1, &[], &[])).collect(),
         edges.clone(),
-        count as u64,
+        u64::from(count),
     )
-    .unwrap();
+    .expect("refinement fixture must satisfy its construction invariant");
     assert!(
-        plan.work_profile().auxiliary_slots_peak() <= 12 * count as u64 + 2 * edges.len() as u64
+        plan.work_profile().auxiliary_slots_peak()
+            <= 12 * u64::from(count) + 2 * u64_count(edges.len())
     );
 }
 
@@ -1153,8 +1401,8 @@ fn allocation_count_regression() {
         Vec::new(),
         64,
     )
-    .unwrap();
-    assert!(plan.work_profile().allocation_count() <= 32 + plan.batches().len() as u64 * 4);
+    .expect("refinement fixture must satisfy its construction invariant");
+    assert!(plan.work_profile().allocation_count() <= 32 + u64_count(plan.batches().len()) * 4);
 }
 
 #[test]
@@ -1173,22 +1421,24 @@ fn small_stack_deep_drop_after_success_failure_cancel() {
                     Vec::new(),
                     256,
                 )
-                .unwrap();
+                .expect("refinement fixture must satisfy its construction invariant");
                 let mut outcomes = success_outcomes(10_000);
                 if phase == 1 {
                     outcomes.insert(TaskId::new(5_000), TaskExecution::Failure(1));
                 }
                 let mut executor = PermutingBatchExecutor {
                     outcomes,
-                    reverse: true,
+                    order: CompletionOrder::Reverse,
                 };
                 let mut cancel = CancelAfter::new(if phase == 2 { 5_000 } else { usize::MAX });
                 let mut sink = RecordingSink::default();
-                let _ = plan.execute(&mut executor, &mut cancel, &mut sink).unwrap();
+                let _ = plan
+                    .execute(&mut executor, &mut cancel, &mut sink)
+                    .expect("refinement fixture must satisfy its construction invariant");
                 drop(plan);
             }
         })
-        .unwrap()
+        .expect("refinement fixture must satisfy its construction invariant")
         .join()
         .expect("all terminal paths and drops are stack-safe");
 }
