@@ -1,0 +1,67 @@
+@startuml
+title Durable committed-prefix protocol
+
+skinparam backgroundColor #F7FAFC
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.5
+skinparam state {
+  BackgroundColor #DBEAFE
+  BorderColor #1D4ED8
+  FontColor #172554
+}
+
+state "Validate immutable input" as Validate #FEF3C7
+state "Ready" as Ready #DBEAFE
+state "Computed\nvolatile staged event" as Computed #FCE7F3
+state "Journaled\nauthoritative event" as Journaled #DCFCE7
+state "Publishing\nidempotent receipt" as Publishing #EDE9FE
+state "Crashed\nvolatile state discarded" as Crashed #FED7AA
+state "Rejected" as Rejected #FECACA
+state "Completed" as Completed #BBF7D0
+state "Failed" as Failed #FECACA
+state "Incomplete" as Incomplete #FDE68A
+state "Cancelled" as Cancelled #FDE68A
+state "Resource limited" as ResourceLimited #FDE68A
+
+[*] --> Validate
+Validate --> Rejected : stale, corrupt, malformed,
+Validate --> Ready : exact plan and checkpoint
+
+Ready --> Journaled : recover earliest durable\nunpublished event
+Ready --> Computed : stage task or boundary event
+Computed --> Journaled : append canonical event
+Computed --> Crashed : crash before append
+Journaled --> Publishing : publish (plan, ordinal)
+Journaled --> Crashed : crash after append
+Publishing --> Crashed : crash after publication
+
+Crashed --> Rejected : unsafe pre-journal replay
+Crashed --> Journaled : durable event lacks receipt
+Crashed --> Publishing : event and receipt durable
+Crashed --> Ready : no durable event; replay witnessed
+
+Publishing --> Ready : success advances cursor
+Publishing --> Completed : completed event
+Publishing --> Failed : failure event
+Publishing --> Incomplete : incomplete event
+Publishing --> Cancelled : cancellation event
+Publishing --> ResourceLimited : resource event
+
+Rejected --> [*]
+Completed --> [*]
+Failed --> [*]
+Incomplete --> [*]
+Cancelled --> [*]
+ResourceLimited --> [*]
+
+note right of Journaled
+  The journal is authoritative.
+  Publication cannot precede append.
+end note
+
+note right of Crashed
+  Journal and receipts survive.
+  Only volatile staging is lost.
+end note
+@enduml

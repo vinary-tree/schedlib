@@ -1,0 +1,65 @@
+@startuml
+title Durable scheduling responsibility boundaries
+
+skinparam backgroundColor #F7FAFC
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam component {
+  BorderColor #1E3A8A
+  BackgroundColor #DBEAFE
+  FontColor #172554
+}
+skinparam package {
+  BorderColor #475569
+  BackgroundColor #F8FAFC
+  FontColor #0F172A
+}
+
+package "schedlib" #EFF6FF {
+  component "External key map" as Keys #DBEAFE
+  component "Structural plan identity" as Identity #DBEAFE
+  component "Typed event journal" as Events #DCFCE7
+  component "Checkpoint validator" as Validator #DCFCE7
+  component "Iterative resume machine" as Resume #EDE9FE
+  component "Logical limits and work profile" as Limits #FEF3C7
+}
+
+package "schedlib-interop" #F0FDF4 {
+  component "Canonical versioned codecs" as Codecs #BBF7D0
+  component "Domain-separated digest" as Digest #BBF7D0
+}
+
+package "vinary-runtime" #FFF7ED {
+  database "Durable artifacts" as Artifacts #FED7AA
+  component "Atomic replace / sync policy" as Storage #FED7AA
+}
+
+package "consumer" #FDF2F8 {
+  component "Task semantics" as Semantics #FBCFE8
+  component "Idempotent commit sink" as Sink #FBCFE8
+}
+
+Keys --> Identity : canonical dense mapping
+Identity --> Events : binds every event
+Events --> Validator : validates committed prefix
+Validator --> Resume : accepted state only
+Limits --> Validator : item and byte claims
+Limits --> Resume : work / heap bounds
+Semantics --> Identity : semantic profile
+Resume --> Sink : ordered logical publication
+
+Identity --> Codecs : structural manifest
+Events --> Codecs : portable records
+Codecs --> Digest : canonical bytes
+Codecs --> Artifacts : encoded checkpoint / journal
+Storage --> Artifacts : persistence ownership
+Artifacts --> Validator : decoded immutable snapshot
+
+note bottom of Codecs #FEF3C7
+No JSON, hashing, filesystem, or runtime artifact type enters schedlib's hot loop.
+end note
+
+note bottom of Artifacts #FECACA
+Artifact durability remains outside schedlib; the runtime must prove its own storage protocol.
+end note
+@enduml

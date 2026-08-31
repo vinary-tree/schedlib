@@ -39,6 +39,15 @@ verify_registry() {
   local registry="$repository_root/formal/refinement-map.tsv"
   local rayon_registry="$repository_root/formal/rayon-refinement-map.tsv"
   local log="$evidence_directory/refinement-registry.log"
+  local scheduler_configs=(
+    "$repository_root/formal/tla/Empty.cfg"
+    "$repository_root/formal/tla/BatchOrder.cfg"
+    "$repository_root/formal/tla/Dependencies.cfg"
+    "$repository_root/formal/tla/Effects.cfg"
+    "$repository_root/formal/tla/Resources.cfg"
+    "$repository_root/formal/tla/Outcomes.cfg"
+    "$repository_root/formal/tla/RayonAdapter.cfg"
+  )
 
   {
     awk -F '\t' '
@@ -124,7 +133,7 @@ verify_registry() {
 
     mapfile -t configured_predicates < <(
       rg --no-filename '^(INVARIANT|PROPERTY) ' \
-        "$repository_root/formal/tla"/*.cfg |
+        "${scheduler_configs[@]}" |
         awk '{print $2}' |
         sort -u
     )

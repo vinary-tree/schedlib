@@ -8,6 +8,7 @@ verify-docs:
 
 verify-formal:
 	./scripts/verify-formal.sh all
+	./scripts/verify-durable-resume-formal.sh
 
 verify-rust:
 	./scripts/verify-rust.sh
