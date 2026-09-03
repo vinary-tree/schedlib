@@ -1332,6 +1332,20 @@ where
         Ok(checkpoint)
     }
 
+    /// Validates every internal checkpoint consistency field.
+    ///
+    /// This check does not compare the embedded structural identity with an
+    /// active plan. Interoperability encoders use it to reject hidden
+    /// corruption before projecting portable semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DurableError::MalformedCheckpoint`] for corrupt integrity,
+    /// count, cursor, event-language, key, ordinal, or receipt state.
+    pub fn validate(&self) -> Result<(), DurableError> {
+        self.validate_structural()
+    }
+
     /// Validates every structural checkpoint field against `active`.
     ///
     /// # Errors
@@ -2874,6 +2888,14 @@ mod tests {
             Err(error) => panic!("complete canonical language rejected: {error}"),
         };
         assert_eq!(completed.next_task_cursor(), 2);
+    }
+
+    #[test]
+    fn public_checkpoint_validation_rejects_hidden_corruption() {
+        let valid = Checkpoint::empty(identity(vec![10]));
+        assert_eq!(valid.validate(), Ok(()));
+        let corrupt = Checkpoint::corrupt(identity(vec![10]));
+        assert_eq!(corrupt.validate(), Err(DurableError::MalformedCheckpoint));
     }
 
     #[test]
