@@ -99,6 +99,40 @@ task that can crash before journal append with an explicit `ReplayClass`.
 Cancellation and resource boundaries are zero-based success counts;
 cancellation has deterministic priority when both occur at the same boundary.
 
+## Bridge exact semantics to portable codecs
+
+An interoperability implementation must borrow semantics through
+`PlanIdentity::view` or `Checkpoint::view`. `PlanIdentityView` exposes all
+seven exact identity fields: schema, canonical keys, canonical dependencies,
+canonical effects, aligned costs, budget, and semantic profile.
+`CheckpointView` adds the canonical event-kind sequence, published prefix, and
+derived next-task cursor. Both views borrow existing storage and allocate
+nothing.
+
+The reverse direction is intentionally narrower. Decode the complete plan into
+`PlanIdentity::new`, then pass only the decoded event kinds and published
+prefix to `Checkpoint::from_event_kinds`. The constructor derives every
+redundant field and rejects a noncanonical event language. A codec cannot
+inject an ordinal, dense task identifier, external task key, or resume cursor.
+
+This function illustrates the read-only boundary with a key type that need not
+implement `Copy`:
+
+```rust
+use schedlib::durable::{Checkpoint, CheckpointEventKind};
+
+fn semantic_event_kinds<K>(checkpoint: &Checkpoint<K>) -> Vec<CheckpointEventKind>
+where
+    K: Clone + Ord,
+{
+    checkpoint.view().event_kinds().collect()
+}
+```
+
+The responsibility diagram linked below remains normative: schedlib owns these
+semantic projections and validation, `schedlib-interop` owns their canonical
+wire representation, and `vinary-runtime` owns durable artifacts.
+
 For each ledger row, maintenance changes must:
 
 1. preserve the named Rocq, TLA+, SMT, and executable obligations;

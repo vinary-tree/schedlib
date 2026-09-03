@@ -99,6 +99,19 @@ work bound, logical allocation sites, and a conservative temporary-slot bound.
 `ExecutionWorkProfile` records dispatch, completion, commit, current-batch
 scratch, and execution allocation events.
 
+## Durable interoperability boundary
+
+`PlanIdentityView` and `CheckpointView` are borrowed projections. Constructing
+either view takes $`O(1)`$ work and space. Iterating a plan visits each task,
+dependency, and resource occurrence once; iterating checkpoint event kinds
+visits each event once.
+
+For $`j`$ decoded event kinds, `Checkpoint::from_event_kinds` performs one
+forward construction pass and one structural validation pass. It derives
+ordinals, task positions, keys, and the resume cursor in $`O(j)`$ work and
+allocates exactly the event vector and receipt prefix, both bounded by
+$`O(j)`$. No plan- or journal-dependent operation uses native recursion.
+
 ## Optional indexed parallel join
 
 With the `rayon` feature, one owned pool is constructed once and reused across

@@ -20,6 +20,9 @@ or safe resume.
 - schedlib owns external-key-to-dense mapping, structural plan identity, typed
   ordered events, checkpoint semantics, receipt semantics, replay classes,
   iterative resume, logical bounds, and work profiles.
+- schedlib exposes immutable `PlanIdentityView` and `CheckpointView`
+  projections plus a checked `Checkpoint::from_event_kinds` constructor.
+  These expose semantic values, never a byte format or digest authority.
 - `schedlib-interop` owns canonical versioned plan/event/checkpoint encodings
   and domain-separated digests. It depends on schedlib.
 - `vinary-runtime` owns durable artifact paths, atomic publication, file and
@@ -40,6 +43,11 @@ evolve their formats and durability mechanisms without changing core
 observation semantics. The cost is an explicit conversion boundary and a need
 for cross-crate refinement tests. That cost is accepted because it makes
 invalid dependency direction and storage-driven semantic drift reviewable.
+
+The conversion boundary is minimal. Views borrow already-canonical slices in
+constant work and allocate nothing. Checkpoint reconstruction accepts only an
+event-kind vector, derives ordinals, task identifiers, keys, and the resume
+cursor, then runs the same structural validator used by ordinary recovery.
 
 The [durable contract](../../usage/durable-resume-contract.md) is green for the
 intended reason at implementation commit

@@ -196,6 +196,81 @@ pub struct StructuralPlanIdentity<K> {
     signature: PlanSignature<K>,
 }
 
+/// Immutable borrowed projection of every structural plan-identity field.
+///
+/// This view permits standalone interoperability crates to encode the exact
+/// semantic identity without exposing ownership or serialization policy.
+#[derive(Debug, PartialEq, Eq)]
+pub struct PlanIdentityView<'a, K> {
+    schema: u64,
+    keys: &'a [K],
+    dependencies: &'a [(TaskId, TaskId)],
+    effects: &'a [(Vec<u64>, Vec<u64>)],
+    costs: &'a [u64],
+    budget: u64,
+    semantic_profile: &'a str,
+}
+
+impl<K> Clone for PlanIdentityView<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<K> Copy for PlanIdentityView<'_, K> {}
+
+impl<'a, K> PlanIdentityView<'a, K> {
+    /// Returns the caller-defined plan schema.
+    #[must_use]
+    pub const fn schema(self) -> u64 {
+        self.schema
+    }
+
+    /// Returns canonical external keys in dense-task order.
+    #[must_use]
+    pub const fn keys(self) -> &'a [K] {
+        self.keys
+    }
+
+    /// Returns canonical, sorted, duplicate-free dense dependency edges.
+    #[must_use]
+    pub const fn dependencies(self) -> &'a [(TaskId, TaskId)] {
+        self.dependencies
+    }
+
+    /// Iterates canonical read and write resource sets in dense-task order.
+    #[must_use]
+    pub fn effects(self) -> impl ExactSizeIterator<Item = (&'a [u64], &'a [u64])> + 'a {
+        self.effects
+            .iter()
+            .map(|(reads, writes)| (reads.as_slice(), writes.as_slice()))
+    }
+
+    /// Returns per-task costs in dense-task order.
+    #[must_use]
+    pub const fn costs(self) -> &'a [u64] {
+        self.costs
+    }
+
+    /// Returns the caller-visible resource budget.
+    #[must_use]
+    pub const fn budget(self) -> u64 {
+        self.budget
+    }
+
+    /// Returns the complete semantic-profile string bound into identity.
+    #[must_use]
+    pub const fn semantic_profile(self) -> &'a str {
+        self.semantic_profile
+    }
+
+    /// Returns the dense task count.
+    #[must_use]
+    pub const fn task_count(self) -> usize {
+        self.keys.len()
+    }
+}
+
 impl<K, P> PartialEq<PlanIdentity<K, P>> for StructuralPlanIdentity<K>
 where
     K: PartialEq,
@@ -218,6 +293,12 @@ impl<K> StructuralPlanIdentity<K> {
     fn task_count(&self) -> usize {
         self.signature.0.keys.len()
     }
+
+    /// Borrows every exact structural identity field without allocation.
+    #[must_use]
+    pub fn view(&self) -> PlanIdentityView<'_, K> {
+        plan_identity_view(&self.signature)
+    }
 }
 
 impl<K, P> PlanIdentity<K, P>
@@ -227,6 +308,12 @@ where
 {
     /// Number of independently identity-bearing structural fields.
     pub const FIELD_COUNT: usize = 7;
+
+    /// Borrows every exact structural identity field without allocation.
+    #[must_use]
+    pub fn view(&self) -> PlanIdentityView<'_, K> {
+        plan_identity_view(&self.signature)
+    }
 
     /// Canonicalizes and validates every structural identity field.
     ///
@@ -453,6 +540,18 @@ where
                 .saturating_add(resources)
                 .saturating_add(self.signature.0.costs.len()),
         )
+    }
+}
+
+fn plan_identity_view<K>(signature: &PlanSignature<K>) -> PlanIdentityView<'_, K> {
+    PlanIdentityView {
+        schema: signature.0.schema,
+        keys: &signature.0.keys,
+        dependencies: &signature.0.dependencies,
+        effects: &signature.0.effects,
+        costs: &signature.0.costs,
+        budget: signature.0.budget,
+        semantic_profile: &signature.0.semantic_profile,
     }
 }
 
@@ -894,13 +993,20 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CheckpointKind {
+/// Payload-free semantic discriminator retained by a durable checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CheckpointEventKind {
+    /// A task succeeded at the next canonical ordinal.
     Success,
+    /// A task failed at the next canonical ordinal.
     Failure,
+    /// A task could not yet complete at the next canonical ordinal.
     Incomplete,
+    /// Cancellation won the next-task boundary.
     Cancelled,
+    /// The resource policy rejected the next task.
     ResourceLimited,
+    /// Every task succeeded and the completion boundary committed.
     Completed,
 }
 
@@ -909,7 +1015,7 @@ struct CheckpointEvent<K> {
     ordinal: EventOrdinal,
     task: Option<TaskId>,
     key: Option<K>,
-    kind: CheckpointKind,
+    kind: CheckpointEventKind,
 }
 
 /// Immutable durable recovery checkpoint.
@@ -925,6 +1031,59 @@ pub struct Checkpoint<K> {
     next_task_cursor: usize,
     integrity_valid: bool,
     encoded_events: usize,
+}
+
+/// Immutable borrowed projection of a validated checkpoint.
+///
+/// Event payloads are absent by construction. Ordinals, task identifiers,
+/// keys, and the resume cursor are derived from the canonical event-kind
+/// sequence and exact plan identity.
+#[derive(Debug)]
+pub struct CheckpointView<'a, K> {
+    plan: PlanIdentityView<'a, K>,
+    events: &'a [CheckpointEvent<K>],
+    published_prefix: usize,
+    next_task_cursor: usize,
+}
+
+impl<K> Clone for CheckpointView<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<K> Copy for CheckpointView<'_, K> {}
+
+impl<'a, K> CheckpointView<'a, K> {
+    /// Returns the complete structural plan identity embedded in the checkpoint.
+    #[must_use]
+    pub const fn plan(self) -> PlanIdentityView<'a, K> {
+        self.plan
+    }
+
+    /// Returns the canonical number of encoded events.
+    #[must_use]
+    pub const fn event_count(self) -> usize {
+        self.events.len()
+    }
+
+    /// Iterates payload-free event kinds in canonical ordinal order.
+    #[must_use]
+    pub fn event_kinds(self) -> impl ExactSizeIterator<Item = CheckpointEventKind> + 'a {
+        self.events.iter().map(|event| event.kind)
+    }
+
+    /// Returns the number of leading events published logically.
+    #[must_use]
+    pub const fn published_prefix(self) -> usize {
+        self.published_prefix
+    }
+
+    /// Returns the success-prefix-derived next-task cursor.
+    #[must_use]
+    pub const fn next_task_cursor(self) -> usize {
+        self.next_task_cursor
+    }
 }
 
 impl<K> Checkpoint<K>
@@ -958,6 +1117,121 @@ where
         let mut checkpoint = Self::empty(plan);
         checkpoint.integrity_valid = false;
         checkpoint
+    }
+
+    /// Constructs a checkpoint from its minimal payload-free semantics.
+    ///
+    /// Ordinals, dense task identifiers, external keys, and the resume cursor
+    /// are derived rather than accepted from the caller. The event vector must
+    /// be a canonical success prefix followed by at most one valid terminal
+    /// event. `published_prefix` must name a prefix of those events.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DurableError::MalformedCheckpoint`] for excess events,
+    /// impossible terminal placement, success after a terminal event, or a
+    /// receipt prefix longer than the event sequence.
+    pub fn from_event_kinds<P>(
+        plan: PlanIdentity<K, P>,
+        kinds: Vec<CheckpointEventKind>,
+        published_prefix: usize,
+    ) -> Result<Self, DurableError>
+    where
+        P: AsRef<str> + Clone + Eq,
+    {
+        let task_count = plan.task_count();
+        if kinds.len() > task_count.saturating_add(1) || published_prefix > kinds.len() {
+            return Err(DurableError::MalformedCheckpoint);
+        }
+
+        let signature = plan.signature;
+        let kind_count = kinds.len();
+        let mut events = Vec::with_capacity(kind_count);
+        let mut success_count = 0usize;
+        for (index, kind) in kinds.into_iter().enumerate() {
+            let ordinal = usize_to_u64(index)
+                .checked_add(1)
+                .ok_or(DurableError::MalformedCheckpoint)?;
+            let is_last = index
+                .checked_add(1)
+                .is_some_and(|position| position == kind_count);
+            let (task, key) = match kind {
+                CheckpointEventKind::Success => {
+                    if success_count >= task_count {
+                        return Err(DurableError::MalformedCheckpoint);
+                    }
+                    let dense = u32::try_from(success_count)
+                        .map(TaskId::new)
+                        .map_err(|_| DurableError::MalformedCheckpoint)?;
+                    let key = signature
+                        .0
+                        .keys
+                        .get(success_count)
+                        .cloned()
+                        .ok_or(DurableError::MalformedCheckpoint)?;
+                    success_count = success_count
+                        .checked_add(1)
+                        .ok_or(DurableError::MalformedCheckpoint)?;
+                    (Some(dense), Some(key))
+                }
+                CheckpointEventKind::Failure | CheckpointEventKind::Incomplete => {
+                    if !is_last || success_count >= task_count {
+                        return Err(DurableError::MalformedCheckpoint);
+                    }
+                    let dense = u32::try_from(success_count)
+                        .map(TaskId::new)
+                        .map_err(|_| DurableError::MalformedCheckpoint)?;
+                    let key = signature
+                        .0
+                        .keys
+                        .get(success_count)
+                        .cloned()
+                        .ok_or(DurableError::MalformedCheckpoint)?;
+                    (Some(dense), Some(key))
+                }
+                CheckpointEventKind::Cancelled | CheckpointEventKind::ResourceLimited => {
+                    if !is_last || success_count >= task_count {
+                        return Err(DurableError::MalformedCheckpoint);
+                    }
+                    (None, None)
+                }
+                CheckpointEventKind::Completed => {
+                    if !is_last || success_count != task_count {
+                        return Err(DurableError::MalformedCheckpoint);
+                    }
+                    (None, None)
+                }
+            };
+            events.push(CheckpointEvent {
+                ordinal: EventOrdinal(ordinal),
+                task,
+                key,
+                kind,
+            });
+        }
+
+        let plan = StructuralPlanIdentity { signature };
+        let receipt_ids = events
+            .iter()
+            .take(published_prefix)
+            .map(|event| EventId {
+                plan: plan.signature.clone(),
+                ordinal: event.ordinal,
+            })
+            .collect();
+        let encoded_events = events.len();
+        let checkpoint = Self {
+            plan,
+            events: Arc::new(events),
+            receipts: PublicationLedger {
+                event_ids: Arc::new(receipt_ids),
+            },
+            next_task_cursor: success_count,
+            integrity_valid: true,
+            encoded_events,
+        };
+        checkpoint.validate_structural()?;
+        Ok(checkpoint)
     }
 
     /// Returns representative single-field corruptions of `checkpoint`.
@@ -1092,6 +1366,17 @@ where
         self.next_task_cursor
     }
 
+    /// Borrows the exact checkpoint semantics without allocation.
+    #[must_use]
+    pub fn view(&self) -> CheckpointView<'_, K> {
+        CheckpointView {
+            plan: self.plan.view(),
+            events: self.events.as_slice(),
+            published_prefix: self.receipts.len(),
+            next_task_cursor: self.next_task_cursor,
+        }
+    }
+
     fn materialize<P, S, F, I>(
         &self,
         active: &PlanIdentity<K, P>,
@@ -1109,18 +1394,24 @@ where
         };
         for checkpoint_event in self.events.iter() {
             let outcome = match checkpoint_event.kind {
-                CheckpointKind::Success => {
-                    outcome_for_kind(outcomes, checkpoint_event.task, CheckpointKind::Success)?
-                }
-                CheckpointKind::Failure => {
-                    outcome_for_kind(outcomes, checkpoint_event.task, CheckpointKind::Failure)?
-                }
-                CheckpointKind::Incomplete => {
-                    outcome_for_kind(outcomes, checkpoint_event.task, CheckpointKind::Incomplete)?
-                }
-                CheckpointKind::Cancelled => DurableOutcome::Cancelled,
-                CheckpointKind::ResourceLimited => DurableOutcome::ResourceLimited,
-                CheckpointKind::Completed => DurableOutcome::Completed,
+                CheckpointEventKind::Success => outcome_for_kind(
+                    outcomes,
+                    checkpoint_event.task,
+                    CheckpointEventKind::Success,
+                )?,
+                CheckpointEventKind::Failure => outcome_for_kind(
+                    outcomes,
+                    checkpoint_event.task,
+                    CheckpointEventKind::Failure,
+                )?,
+                CheckpointEventKind::Incomplete => outcome_for_kind(
+                    outcomes,
+                    checkpoint_event.task,
+                    CheckpointEventKind::Incomplete,
+                )?,
+                CheckpointEventKind::Cancelled => DurableOutcome::Cancelled,
+                CheckpointEventKind::ResourceLimited => DurableOutcome::ResourceLimited,
+                CheckpointEventKind::Completed => DurableOutcome::Completed,
             };
             journal.append_checked(DurableEvent {
                 plan: active.signature.clone(),
@@ -1134,21 +1425,21 @@ where
     }
 }
 
-fn checkpoint_kind<S, F, I>(outcome: &DurableOutcome<S, F, I>) -> CheckpointKind {
+fn checkpoint_kind<S, F, I>(outcome: &DurableOutcome<S, F, I>) -> CheckpointEventKind {
     match &outcome.kind {
-        OutcomeKind::Success(_) => CheckpointKind::Success,
-        OutcomeKind::Failure(_) => CheckpointKind::Failure,
-        OutcomeKind::Incomplete(_) => CheckpointKind::Incomplete,
-        OutcomeKind::Cancelled => CheckpointKind::Cancelled,
-        OutcomeKind::ResourceLimited => CheckpointKind::ResourceLimited,
-        OutcomeKind::Completed => CheckpointKind::Completed,
+        OutcomeKind::Success(_) => CheckpointEventKind::Success,
+        OutcomeKind::Failure(_) => CheckpointEventKind::Failure,
+        OutcomeKind::Incomplete(_) => CheckpointEventKind::Incomplete,
+        OutcomeKind::Cancelled => CheckpointEventKind::Cancelled,
+        OutcomeKind::ResourceLimited => CheckpointEventKind::ResourceLimited,
+        OutcomeKind::Completed => CheckpointEventKind::Completed,
     }
 }
 
 fn checkpoint_successful_prefix_len<K>(events: &[CheckpointEvent<K>]) -> usize {
     events
         .iter()
-        .take_while(|event| event.kind == CheckpointKind::Success)
+        .take_while(|event| event.kind == CheckpointEventKind::Success)
         .count()
 }
 
@@ -1167,7 +1458,7 @@ fn checkpoint_events_are_canonical<K: Ord>(
             return false;
         }
         match event.kind {
-            CheckpointKind::Success => {
+            CheckpointEventKind::Success => {
                 if event.task.map(TaskId::index) != Some(success_count)
                     || event.key.as_ref() != plan.signature.0.keys.get(success_count)
                 {
@@ -1175,7 +1466,7 @@ fn checkpoint_events_are_canonical<K: Ord>(
                 }
                 success_count += 1;
             }
-            CheckpointKind::Failure | CheckpointKind::Incomplete => {
+            CheckpointEventKind::Failure | CheckpointEventKind::Incomplete => {
                 if index != last_index
                     || success_count >= task_count
                     || event.task.map(TaskId::index) != Some(success_count)
@@ -1184,7 +1475,7 @@ fn checkpoint_events_are_canonical<K: Ord>(
                     return false;
                 }
             }
-            CheckpointKind::Cancelled | CheckpointKind::ResourceLimited => {
+            CheckpointEventKind::Cancelled | CheckpointEventKind::ResourceLimited => {
                 if index != last_index
                     || success_count >= task_count
                     || event.task.is_some()
@@ -1193,7 +1484,7 @@ fn checkpoint_events_are_canonical<K: Ord>(
                     return false;
                 }
             }
-            CheckpointKind::Completed => {
+            CheckpointEventKind::Completed => {
                 if index != last_index
                     || success_count != task_count
                     || event.task.is_some()
@@ -1226,7 +1517,7 @@ fn checkpoint_receipts_are_prefix<K: Clone + Ord>(
 fn outcome_for_kind<S, F, I>(
     outcomes: &[DurableOutcome<S, F, I>],
     task: Option<TaskId>,
-    expected: CheckpointKind,
+    expected: CheckpointEventKind,
 ) -> Result<DurableOutcome<S, F, I>, DurableError>
 where
     S: Clone,
@@ -2372,8 +2663,9 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        Checkpoint, CrashPoint, DurableError, DurableJournal, DurableOutcome, ExternalKeyMap,
-        PlanIdentity, ProtocolInput, ReplayClass, ResumeMachine, TerminalPhase,
+        Checkpoint, CheckpointEventKind, CrashPoint, DurableError, DurableJournal, DurableOutcome,
+        ExternalKeyMap, PlanIdentity, ProtocolInput, ReplayClass, ResumeMachine, TaskId,
+        TerminalPhase,
     };
 
     type Outcome = DurableOutcome<u64, u64, u64>;
@@ -2445,6 +2737,143 @@ mod tests {
             "test-profile",
         );
         assert_eq!(shuffled, canonical);
+    }
+
+    #[test]
+    fn plan_view_exposes_every_canonical_identity_field() {
+        let plan = match PlanIdentity::new(
+            7,
+            vec![30, 10, 20],
+            vec![(20, 30), (10, 20), (10, 20)],
+            vec![
+                (vec![4, 3, 4], vec![9]),
+                (vec![2, 1], vec![8, 8]),
+                (vec![6], vec![7]),
+            ],
+            vec![3, 1, 2],
+            99,
+            "profile-v7",
+        ) {
+            Ok(plan) => plan,
+            Err(error) => panic!("valid identity rejected: {error}"),
+        };
+
+        let view = plan.view();
+        assert_eq!(view.schema(), 7);
+        assert_eq!(view.keys(), &[10, 20, 30]);
+        assert_eq!(
+            view.dependencies(),
+            &[
+                (TaskId::new(0), TaskId::new(1)),
+                (TaskId::new(1), TaskId::new(2)),
+            ]
+        );
+        assert_eq!(
+            view.effects().collect::<Vec<_>>(),
+            vec![
+                (&[1, 2][..], &[8][..]),
+                (&[6][..], &[7][..]),
+                (&[3, 4][..], &[9][..]),
+            ]
+        );
+        assert_eq!(view.costs(), &[1, 2, 3]);
+        assert_eq!(view.budget(), 99);
+        assert_eq!(view.semantic_profile(), "profile-v7");
+        assert_eq!(view.task_count(), 3);
+    }
+
+    #[test]
+    fn borrowed_views_do_not_require_copyable_keys() {
+        let plan = match PlanIdentity::new(
+            8,
+            vec![String::from("task")],
+            Vec::new(),
+            vec![(Vec::new(), Vec::new())],
+            vec![1],
+            1,
+            "profile-v8",
+        ) {
+            Ok(plan) => plan,
+            Err(error) => panic!("valid string-key identity rejected: {error}"),
+        };
+        let first = plan.view();
+        let second = first;
+        assert_eq!(first, second);
+
+        let checkpoint = match Checkpoint::from_event_kinds(plan, Vec::new(), 0) {
+            Ok(checkpoint) => checkpoint,
+            Err(error) => panic!("empty canonical checkpoint rejected: {error}"),
+        };
+        let first = checkpoint.view();
+        let second = first;
+        assert_eq!(first.event_count(), second.event_count());
+    }
+
+    #[test]
+    fn checkpoint_event_kinds_round_trip_minimal_semantics() {
+        let plan = identity(vec![10, 20]);
+        let checkpoint = match Checkpoint::from_event_kinds(
+            plan.clone(),
+            vec![CheckpointEventKind::Success, CheckpointEventKind::Failure],
+            1,
+        ) {
+            Ok(checkpoint) => checkpoint,
+            Err(error) => panic!("canonical event language rejected: {error}"),
+        };
+
+        assert_eq!(checkpoint.validate_for(&plan), Ok(()));
+        let view = checkpoint.view();
+        assert_eq!(view.plan(), plan.view());
+        assert_eq!(view.event_count(), 2);
+        assert_eq!(
+            view.event_kinds().collect::<Vec<_>>(),
+            vec![CheckpointEventKind::Success, CheckpointEventKind::Failure]
+        );
+        assert_eq!(view.published_prefix(), 1);
+        assert_eq!(view.next_task_cursor(), 1);
+    }
+
+    #[test]
+    fn checkpoint_event_kinds_reject_noncanonical_language() {
+        let invalid = [
+            vec![CheckpointEventKind::Completed],
+            vec![CheckpointEventKind::Cancelled, CheckpointEventKind::Success],
+            vec![CheckpointEventKind::Success, CheckpointEventKind::Completed],
+            vec![
+                CheckpointEventKind::Success,
+                CheckpointEventKind::Success,
+                CheckpointEventKind::Failure,
+            ],
+            vec![CheckpointEventKind::Failure, CheckpointEventKind::Success],
+        ];
+        for kinds in invalid {
+            assert_eq!(
+                Checkpoint::from_event_kinds(identity(vec![10, 20]), kinds, 0),
+                Err(DurableError::MalformedCheckpoint)
+            );
+        }
+        assert_eq!(
+            Checkpoint::from_event_kinds(
+                identity(vec![10, 20]),
+                vec![CheckpointEventKind::Success],
+                2,
+            ),
+            Err(DurableError::MalformedCheckpoint)
+        );
+
+        let completed = match Checkpoint::from_event_kinds(
+            identity(vec![10, 20]),
+            vec![
+                CheckpointEventKind::Success,
+                CheckpointEventKind::Success,
+                CheckpointEventKind::Completed,
+            ],
+            3,
+        ) {
+            Ok(checkpoint) => checkpoint,
+            Err(error) => panic!("complete canonical language rejected: {error}"),
+        };
+        assert_eq!(completed.next_task_cursor(), 2);
     }
 
     #[test]

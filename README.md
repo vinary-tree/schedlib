@@ -52,6 +52,8 @@ mutants, and 35 Rust refinement properties. The stack-safe semantic core is
 accepted at commit `086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`; all 35
 properties pass, including 100,000 tasks on a 64 KiB stack. Portable codecs
 remain assigned to `schedlib-interop`, and runtime artifacts remain outside
+schedlib. Borrowed semantic views and a checked event-kind constructor provide
+that crate boundary without adding a codec, digest, or storage dependency to
 schedlib.
 
 ## Use the serial core
