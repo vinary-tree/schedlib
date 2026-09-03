@@ -10,6 +10,11 @@ theorem.
 [`tla/RayonAdapter.tla`](tla/RayonAdapter.tla) separately specifies the
 optional parallel adapter's bounded worker set, nondeterministic physical
 completion, join barrier, and canonical returned completion vector.
+[`tla/DurableResume.tla`](tla/DurableResume.tla),
+[`coq/DurableResume.v`](coq/DurableResume.v), and
+[`smt/durable-resume.smt2`](smt/durable-resume.smt2) jointly specify the
+durable-identity, journal-first publication, crash, and
+committed-prefix resume contract.
 
 ## Why the contract is split
 
@@ -40,6 +45,14 @@ varies one semantic boundary:
 | `Outcomes.cfg` | 27 outcome maps crossed with 4 cancellation counts | Failure, incomplete, cancellation, completion, and serial equivalence |
 | `RayonAdapter.cfg` | Every dispatch/completion interleaving for four tasks at worker limits 1, 2, and 4 | Exact-once bounded execution, join-before-return, worker-count-independent order, and liveness |
 
+The durable model has eight additional configurations. `Crash`, `Resume`,
+`Outcomes`, and `Resources` vary protocol behavior. `Stale`, `KeyCollision`,
+`Malformed`, and `UnsafeReplay` isolate fail-closed rejection. All check the
+same safety set, including structural input immutability, canonical journal,
+durable-before-publish ordering, receipt monotonicity, typed terminal outcome,
+deterministic cancellation-before-resource priority, and eventual terminal
+progress.
+
 Two tasks are sufficient for the effect family because `Independent` is a
 pairwise predicate. Two resources exhaust the empty, singleton, overlapping,
 and disjoint set relationships. The state machine still checks full batch
@@ -68,6 +81,7 @@ the selected worker limit.
 ./scripts/verify-formal.sh tla
 ./scripts/verify-formal.sh tlaps
 ./scripts/verify-formal.sh all
+./scripts/verify-durable-resume-formal.sh
 ```
 
 The wrapper rejects incomplete runs: each TLC log must contain the no-error
@@ -94,3 +108,14 @@ passes every named test in debug and optimized-release builds. The model assumes
 finite nonpanicking task callbacks: Rust panics are outside `TaskExecution` and
 therefore propagate according to Rayon rather than being misreported as typed
 success, failure, or incompleteness.
+
+[`durable-resume-invariants.tsv`](durable-resume-invariants.tsv) has 35 rows.
+Each row names its Rocq theorem, configured TLA+ predicate, SMT control,
+independent executable oracle, required-red Rust property, and causal mutant.
+Every row names accepted implementation commit
+`086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`. The integrated verifier
+resolves that commit and requires exact bidirectional name coverage, 18 closed assumption reports,
+successful `coqchk`, eight complete TLC searches, 21 expected SMT verdicts,
+4,695 oracle cases, 35 killed mutants, and a Cargo failure caused only by the
+reviewed missing `schedlib::durable` module before implementation or all 35
+passing Rust properties after acceptance.

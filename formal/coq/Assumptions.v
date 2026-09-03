@@ -1,0 +1,20 @@
+From Schedlib Require Import DurableResume.
+
+Print Assumptions valid_key_map_has_no_dense_alias.
+Print Assumptions equal_plan_identity_binds_dependencies.
+Print Assumptions journal_trace_ordinals_are_exact.
+Print Assumptions terminal_journal_ends_with_terminal_event.
+Print Assumptions completed_journal_is_total.
+Print Assumptions accepted_checkpoint_has_exact_event_ids.
+Print Assumptions accepted_checkpoint_cursor_is_success_prefix.
+Print Assumptions recovery_publication_is_exactly_once.
+Print Assumptions recovery_publishes_every_durable_event.
+Print Assumptions recovery_never_invents_an_event.
+Print Assumptions unsafe_in_flight_task_is_rejected.
+Print Assumptions resumed_observation_equals_serial.
+Print Assumptions physical_completion_order_is_unobservable.
+Print Assumptions admissible_codec_append_preserves_limits.
+Print Assumptions valid_machine_has_linear_work.
+Print Assumptions valid_machine_has_linear_heap.
+Print Assumptions valid_machine_has_constant_native_stack.
+Print Assumptions replay_cursor_step_strictly_decreases.

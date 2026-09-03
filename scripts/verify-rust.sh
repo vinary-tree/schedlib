@@ -50,3 +50,4 @@ run_gate cargo-run-example cargo run --release --all-features --example serial
 run_gate cargo-run-rayon-example cargo run --release --all-features --example rayon
 run_gate cargo-test-doc cargo test --doc --all-features
 run_gate cargo-doc env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+run_gate cargo-package cargo package --locked

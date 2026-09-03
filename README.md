@@ -44,6 +44,18 @@ The Rayon refinement adds 16 tests, including every four-task physical
 completion permutation and a 20,000-task batch on 64 KiB caller and worker
 stacks.
 
+The durable-resume contract adds 35 invariant-ledger rows,
+45 referenced Rocq obligations with 18 explicit no-assumption reports, 18
+configured TLA+ predicates across eight scenario families, 21 exact SMT
+controls, 4,695 independent executable-oracle cases, 35 causally killed
+mutants, and 35 Rust refinement properties. The stack-safe semantic core is
+accepted at commit `086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`; all 35
+properties pass, including 100,000 tasks on a 64 KiB stack. Portable codecs
+remain assigned to `schedlib-interop`, and runtime artifacts remain outside
+schedlib. Borrowed semantic views and a checked event-kind constructor provide
+that crate boundary without adding a codec, digest, or storage dependency to
+schedlib.
+
 ## Use the serial core
 
 [`docs/usage/rust-api.md`](docs/usage/rust-api.md) contains a complete compiling
@@ -70,22 +82,34 @@ cargo run --release --features rayon --example rayon
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) defines the vocabulary and symbols.
 - [`docs/theory/deterministic-scheduling.md`](docs/theory/deterministic-scheduling.md)
   derives the scheduler semantics.
+- [`docs/theory/durable-identity-and-resume.md`](docs/theory/durable-identity-and-resume.md)
+  defines structural identity and crash-safe committed-prefix recovery.
 - [`docs/design/architecture.md`](docs/design/architecture.md) defines component
   boundaries and refinement targets.
 - [`docs/design/formal-state-machine.md`](docs/design/formal-state-machine.md)
   specifies every state and transition.
+- [`docs/design/durable-resume-protocol.md`](docs/design/durable-resume-protocol.md)
+  assigns persistence responsibilities and specifies the iterative protocol.
 - [`docs/scientific/evidence-method.md`](docs/scientific/evidence-method.md)
   explains the exhaustive evidence.
+- [`docs/scientific/durable-resume-evidence.md`](docs/scientific/durable-resume-evidence.md)
+  records the durable proof, oracle, mutation, and required-red evidence.
 - [`docs/engineering/refinement-and-testing.md`](docs/engineering/refinement-and-testing.md)
   defines implementation and test acceptance.
 - [`docs/security/cancellation-and-resources.md`](docs/security/cancellation-and-resources.md)
   covers cancellation and resource containment.
+- [`docs/security/durable-resume-threat-model.md`](docs/security/durable-resume-threat-model.md)
+  covers checkpoint substitution, corruption, replay, and resource attacks.
 - [`docs/usage/formal-workflow.md`](docs/usage/formal-workflow.md) provides the
   operator workflow.
+- [`docs/usage/durable-resume-contract.md`](docs/usage/durable-resume-contract.md)
+  provides the implemented core and verification workflow.
 - [`docs/usage/rust-api.md`](docs/usage/rust-api.md) documents production API
   construction and execution.
 - [`docs/engineering/algorithms-and-complexity.md`](docs/engineering/algorithms-and-complexity.md)
   specifies the selected data structures and exact complexity parameters.
+- [`docs/engineering/durable-resume-verification.md`](docs/engineering/durable-resume-verification.md)
+  defines implementation acceptance for all 35 durable invariants.
 
 ## Local gates
 
@@ -98,9 +122,13 @@ make verify
 Run production acceptance with one Cargo job inside a bounded systemd scope as
 described in the [formal workflow](docs/usage/formal-workflow.md). The required
 gates include `cargo test --all-targets`, release tests, strict Clippy, Rustdoc,
-diagram rendering, `vinary-doc-lint`, and `pgmcp bug-gate`.
+verified packaging, diagram rendering, `vinary-doc-lint`, and `pgmcp bug-gate`.
 
 The scripts create all generated state, logs, and temporary files beneath the
 ignored, persistent `target/` directory. Formal checks self-enter a
 `systemd-run --user --scope` with a 4 GiB memory ceiling, no swap, bounded CPU,
 and headless Java. No workflow uses a memory-backed temporary directory.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

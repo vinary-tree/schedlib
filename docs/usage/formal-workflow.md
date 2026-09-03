@@ -12,6 +12,7 @@ Use a focused command while editing a model:
 ```sh
 ./scripts/verify-formal.sh tla
 ./scripts/verify-formal.sh tlaps
+./scripts/verify-durable-resume-formal.sh
 ```
 
 `tla` parses both modules and runs all six TLC configurations. `tlaps` proves
@@ -44,6 +45,13 @@ Review these files before cleanup:
 | Resource model | `target/verification/tlc-Resources.log` |
 | Outcome model | `target/verification/tlc-Outcomes.log` |
 | TLAPS proof | `target/verification/tlaps.log` |
+| Durable invariant traceability | `target/durable-resume/logs/invariant-ledger.log` |
+| Durable Rocq kernel and assumptions | `target/durable-resume/logs/rocq-*.log` |
+| Durable TLA+ scenarios | `target/durable-resume/logs/tlc-*.log` |
+| Durable SMT controls | `target/durable-resume/logs/z3-durable-resume.log` |
+| Durable executable oracle | `target/durable-resume/logs/executable-oracle.log` |
+| Durable causal mutants | `target/durable-resume/logs/causal-mutants.log` |
+| Durable Rust refinement contract | `target/durable-resume/logs/durable-resume-required-red.log` |
 | Rust acceptance | `target/acceptance/*.log` |
 | Diagram rendering | `target/documentation/render-diagrams.log` |
 | Documentation lint | `target/documentation/vinary-doc-lint.log` |

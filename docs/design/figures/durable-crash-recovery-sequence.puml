@@ -1,0 +1,61 @@
+@startuml
+title Journal-first publication and crash recovery
+
+skinparam backgroundColor #F7FAFC
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam ParticipantBorderColor #1E3A8A
+skinparam ParticipantBackgroundColor #DBEAFE
+skinparam ParticipantFontColor #172554
+skinparam sequence {
+  LifeLineBorderColor #475569
+  LifeLineBackgroundColor #F8FAFC
+  GroupBorderColor #7C3AED
+  GroupBackgroundColor #F5F3FF
+}
+
+actor Caller #FEF3C7
+participant "schedlib\nresume machine" as Machine #DBEAFE
+database "vinary-runtime\ndurable journal" as Journal #DCFCE7
+collections "publication\nreceipt set" as Receipts #EDE9FE
+participant "consumer\ncommit sink" as Sink #FCE7F3
+
+Caller -> Machine : active structural plan + checkpoint
+Machine -> Machine : validate keys, identity, shape, cursor, limits
+
+alt invalid input
+  Machine --> Caller : Rejected; no new effects or events
+else valid input
+  loop earliest durable event without receipt
+    Machine -> Receipts : insert (plan, ordinal)
+    Receipts -> Sink : logical publication
+  end
+
+  Machine -> Machine : execute or replay witnessed task
+  Machine -> Journal : append canonical event
+
+  alt crash after append, before publication
+    Machine -[#C2410C]>x Machine : volatile state lost
+    Caller -> Machine : resume same immutable plan
+    Machine -> Journal : read authoritative prefix
+    Machine -> Receipts : publish missing event once
+    Receipts -> Sink : logical publication
+  else ordinary publication
+    Machine -> Receipts : insert (plan, ordinal)
+    Receipts -> Sink : logical publication
+  end
+
+  alt crash after publication
+    Machine -[#C2410C]>x Machine : volatile cursor lost
+    Caller -> Machine : resume same immutable plan
+    Machine -> Journal : reconstruct success cursor
+    Machine -> Receipts : confirm existing receipt
+  end
+
+  Machine --> Caller : typed terminal phase + canonical observation
+end
+
+note over Journal,Receipts #FEF3C7
+Append precedes publication. Both durable structures are monotone.
+end note
+@enduml

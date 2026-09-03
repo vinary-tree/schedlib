@@ -21,6 +21,16 @@ tables, or diagrams.
   plan.
 - Committed prefix, $`C`$: the observable prefix of
   $`\mathrm{flat}(P)`$.
+- Structural plan identity, $`I=\langle v,K,D,E,C,B,S\rangle`$: exact schema,
+  external keys, dependencies, effects, costs, budget, and semantic profile.
+- Durable journal, $`J=\langle e_1,\ldots,e_m\rangle`$: the authoritative
+  append-only sequence of canonical task and terminal events.
+- Publication receipts, $`R`$: the canonical prefix of journal event
+  identifiers already exposed logically.
+- Event identifier, $`\mathrm{id}(e)=\langle I,o(e)\rangle`$: structural plan
+  identity paired with a one-based event ordinal.
+- Replay measure, $`\mu(m,c)=m-c`$: journal events remaining after cursor
+  $`c`$ in a journal of length $`m`$.
 
 ## Terms
 
@@ -31,6 +41,11 @@ Canonical
 Commit
 : Publication of one completed task outcome to the caller-visible ordered
   result. Worker completion alone is not observable commit.
+
+Committed-prefix checkpoint
+: Immutable structural plan identity, canonical journal, canonical publication
+  prefix, successful-task cursor, integrity result, and bounded representation
+  counts sufficient to validate and resume one run.
 
 Directed acyclic graph (DAG)
 : A directed graph with no directed cycle. An accepted dependency relation must
@@ -62,9 +77,17 @@ Fairness
 : The TLA+ weak-fairness assumption that an action continuously enabled by the
   scheduler is eventually taken.
 
+Journal-first publication
+: Ordering rule requiring a canonical event to be durable in the authoritative
+  journal before its identifier can be published logically.
+
 Native-stack safety
 : Scheduler-controlled stack consumption is bounded independently of task,
   edge, batch, or nesting depth.
+
+Logical exactly-once publication
+: Idempotent caller-visible observation keyed by structural plan and event
+  ordinal. Physical delivery may retry after a crash.
 
 Pushdown automaton (PDA)
 : An automaton with finite control and an explicit unbounded stack. schedlib
@@ -76,10 +99,19 @@ Refinement
   behavior and invariant of the formal model while adding concrete data
   structures and performance bounds.
 
+Replay class
+: Immutable evidence declaring a task deterministic, idempotent,
+  transactional, or unsafe when a crash occurs before journal append.
+
+Structural identity
+: Exact equality over every semantic manifest field. A finite digest may index
+  this value but does not replace structural comparison.
+
 Stable task identifier
 : A unique totally ordered identifier supplied before planning. It is the only
   tie breaker used by the canonical order.
 
 Terminal phase
-: Exactly one of completed, failed, incomplete, cancelled, rejected-cycle, or
-  exhausted.
+: Exactly one of completed, failed, incomplete, cancelled, resource limited,
+  rejected, rejected cycle, or exhausted, as determined by the applicable
+  scheduler protocol.
