@@ -2,14 +2,17 @@
 
 ## Gate condition
 
-Production durability work may begin only after the complete formal gate is
-green and the required-red suite fails solely because `schedlib::durable` is
-absent. A later implementation is accepted only when that same suite compiles
-and every property passes without weakening the ledger, deleting a negative
-control, or changing a required property name.
+Production durability work began only after the complete formal gate was green
+and the required-red suite failed solely because `schedlib::durable` was
+absent. The core is accepted at commit
+`086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`: the unchanged suite compiles
+and all 35 properties pass without deleting a negative control or changing a
+required property name.
 
-The current invariant state is `required-before-implementation`. No formal-only
-artifact may relabel a row `accepted`; acceptance requires production evidence.
+Every invariant row carries the state
+`accepted@086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`. The traceability gate
+resolves that object as a Git commit before accepting the state. Formal-only
+artifacts still cannot relabel a row; acceptance requires production evidence.
 
 ## Mandatory implementation shapes
 
@@ -81,22 +84,24 @@ must cross:
 - serialization round trip, version mismatch, digest collision controls, and
   malformed bounded input in `schedlib-interop`.
 
-## Acceptance sequence
+## Acceptance sequence and status
 
-1. Run the formal gate unchanged and preserve its evidence.
-2. Confirm the required-red compile failure and record its exact diagnostic.
-3. Implement the smallest complete semantic core that satisfies the public
-   contract; do not add codecs to schedlib.
-4. Make one required-red property green at a time while keeping all earlier
-   properties green.
-5. Add independent production property, mutation, crash, small-stack, and
-   differential tests rather than delegating correctness to the Python oracle.
-6. Implement canonical codecs in `schedlib-interop` and storage integration in
-   `vinary-runtime` under their own formal and failure-injection gates.
-7. Run format, all-target/all-feature debug and release tests, strict Clippy,
-   Rustdoc, documentation rendering, `vinary-doc-lint`, performance/RSS gates,
-   and the pgmcp bug gate.
-8. Change ledger states only with commit-linked evidence for every row.
+1. Complete: run the formal gate unchanged and preserve its evidence.
+2. Complete: confirm the required-red compile failure and record its exact
+   diagnostic.
+3. Complete: implement the semantic core without adding codecs to schedlib.
+4. Complete: make all 35 normative properties green.
+5. Complete for the core: add independent canonicalization, malformed-input,
+   randomized completion, collision-priority, small-stack, mutation, and
+   differential evidence.
+6. Pending in the same work item: formally specify, implement, and test
+   canonical codecs in `schedlib-interop`. Storage integration in
+   `vinary-runtime` retains its separate ownership gate.
+7. In progress: run format, debug and release tests, strict Clippy, Rustdoc,
+   documentation rendering and linting, performance/RSS gates, and the pgmcp
+   bug gate for the final combined change.
+8. Complete for the core: every ledger row names the exact implementation
+   commit; codec invariants will use their own ledger and evidence commit.
 
 ## Failure interpretation
 

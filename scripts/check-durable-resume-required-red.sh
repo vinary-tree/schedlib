@@ -38,22 +38,38 @@ rustfmt --edition 2021 --check \
   2>&1 | tee "$log_directory/durable-resume-required-red-rustfmt.log"
 
 log="$log_directory/durable-resume-required-red.log"
+ledger="$repository_root/formal/durable-resume-invariants.tsv"
+if rg -q $'\trequired-before-implementation$' "$ledger"; then
+  expected_mode="red"
+else
+  expected_mode="green"
+fi
 set +e
-cargo test --offline --manifest-path "$manifest" --no-run \
-  2>&1 | tee "$log"
+if [[ "$expected_mode" == "red" ]]; then
+  cargo test --offline --manifest-path "$manifest" --no-run \
+    2>&1 | tee "$log"
+else
+  cargo test --release --offline --manifest-path "$manifest" \
+    2>&1 | tee "$log"
+fi
 status="${PIPESTATUS[0]}"
 set -e
 
-if [[ "$status" -ne 101 ]]; then
-  echo "durable-resume properties must be red with Cargo status 101; got $status" >&2
-  exit 1
-fi
-if rg -qi 'failed to download|network failure|could not resolve host|timed out while fetching' "$log"; then
-  echo "durable-resume required-red failed because of dependency transport" >&2
-  exit 1
-fi
-if ! rg -Fq 'could not find `durable` in `schedlib`' "$log"; then
-  echo "durable-resume required-red is not caused by the reviewed missing API" >&2
+if [[ "$expected_mode" == "red" ]]; then
+  if [[ "$status" -ne 101 ]]; then
+    echo "durable-resume properties must be red with Cargo status 101; got $status" >&2
+    exit 1
+  fi
+  if rg -qi 'failed to download|network failure|could not resolve host|timed out while fetching' "$log"; then
+    echo "durable-resume required-red failed because of dependency transport" >&2
+    exit 1
+  fi
+  if ! rg -Fq 'could not find `durable` in `schedlib`' "$log"; then
+    echo "durable-resume required-red is not caused by the reviewed missing API" >&2
+    exit 1
+  fi
+elif [[ "$status" -ne 0 ]]; then
+  echo "accepted durable-resume properties must all pass; got Cargo status $status" >&2
   exit 1
 fi
 
@@ -77,4 +93,8 @@ case "$target_directory" in
     ;;
 esac
 
-echo "Validated all 35 causal required-red durable-resume properties."
+if [[ "$expected_mode" == "red" ]]; then
+  echo "Validated all 35 causal required-red durable-resume properties."
+else
+  echo "Validated all 35 causal postimplementation durable-resume properties."
+fi

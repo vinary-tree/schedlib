@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for implementation after the required-red contract is satisfied.
+Accepted and implemented for the schedlib semantic core. Portable codec work
+remains assigned to `schedlib-interop`.
 
 ## Context
 
@@ -40,10 +41,12 @@ observation semantics. The cost is an explicit conversion boundary and a need
 for cross-crate refinement tests. That cost is accepted because it makes
 invalid dependency direction and storage-driven semantic drift reviewable.
 
-The decision does not authorize production implementation until the
-[required-red contract](../../usage/durable-resume-contract.md) becomes green
-for the intended reason and every invariant-ledger row changes state with
-evidence.
+The [durable contract](../../usage/durable-resume-contract.md) is green for the
+intended reason at implementation commit
+`086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`, and all 35 invariant-ledger
+rows cite that commit. This decision does not authorize portable codec or
+runtime storage implementation without their separate formal and
+failure-injection evidence.
 
 ## Rejected alternatives
 

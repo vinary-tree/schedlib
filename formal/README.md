@@ -13,7 +13,7 @@ completion, join barrier, and canonical returned completion vector.
 [`tla/DurableResume.tla`](tla/DurableResume.tla),
 [`coq/DurableResume.v`](coq/DurableResume.v), and
 [`smt/durable-resume.smt2`](smt/durable-resume.smt2) jointly specify the
-preimplementation durable-identity, journal-first publication, crash, and
+durable-identity, journal-first publication, crash, and
 committed-prefix resume contract.
 
 ## Why the contract is split
@@ -112,8 +112,10 @@ success, failure, or incompleteness.
 [`durable-resume-invariants.tsv`](durable-resume-invariants.tsv) has 35 rows.
 Each row names its Rocq theorem, configured TLA+ predicate, SMT control,
 independent executable oracle, required-red Rust property, and causal mutant.
-Every row remains `required-before-implementation`. The integrated verifier
-requires exact bidirectional name coverage, 18 closed assumption reports,
+Every row names accepted implementation commit
+`086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`. The integrated verifier
+resolves that commit and requires exact bidirectional name coverage, 18 closed assumption reports,
 successful `coqchk`, eight complete TLC searches, 21 expected SMT verdicts,
 4,695 oracle cases, 35 killed mutants, and a Cargo failure caused only by the
-reviewed missing `schedlib::durable` module.
+reviewed missing `schedlib::durable` module before implementation or all 35
+passing Rust properties after acceptance.

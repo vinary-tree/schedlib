@@ -51,7 +51,7 @@ Review these files before cleanup:
 | Durable SMT controls | `target/durable-resume/logs/z3-durable-resume.log` |
 | Durable executable oracle | `target/durable-resume/logs/executable-oracle.log` |
 | Durable causal mutants | `target/durable-resume/logs/causal-mutants.log` |
-| Durable required-red contract | `target/durable-resume/logs/durable-resume-required-red.log` |
+| Durable Rust refinement contract | `target/durable-resume/logs/durable-resume-required-red.log` |
 | Rust acceptance | `target/acceptance/*.log` |
 | Diagram rendering | `target/documentation/render-diagrams.log` |
 | Documentation lint | `target/documentation/vinary-doc-lint.log` |

@@ -27,7 +27,7 @@ explains why recorded state and volatile activity must be distinguished.
 | Decidable controls | `formal/smt/durable-resume.smt2` | Exact satisfiable/unsatisfiable verdicts for 21 bounded propositions | Projection, not the full transition system |
 | Independent executable oracle | `scripts/check-durable-resume-exhaustive.py` | 35 named properties over 4,695 finite cases | Bounded Python reference domain |
 | Mutation adequacy | `scripts/check-durable-resume-mutants.py` | Each of 35 causal faults is killed by its mapped oracle | Fault set is declared, not universal |
-| Required-red Rust contract | `formal/required-red/durable-resume/tests/contracts.rs` | Freezes 35 future implementation properties before API construction | Intentionally cannot compile until the durable API exists |
+| Rust refinement contract | `formal/required-red/durable-resume/tests/contracts.rs` | Froze 35 properties before API construction and now executes all of them against production | Bounded concrete types and generated populations |
 
 ## Finite scenario families
 
@@ -85,6 +85,12 @@ contains the expected property identifier. A syntax error, timeout, transport
 failure, or different property failure is rejected as noncausal evidence.
 
 ## Reproducibility
+
+The ledger binds every accepted row to core implementation commit
+`086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`. The postimplementation Rust
+run passed all 35 properties, including the 100,000-task lifecycle on a 64 KiB
+native stack. Its captured log has SHA-256 digest
+`b77ed38491cc73a875081c60b7813bf52d64eeb53090856eca2f7454643608fd`.
 
 Run:
 

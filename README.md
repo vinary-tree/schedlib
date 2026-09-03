@@ -44,13 +44,15 @@ The Rayon refinement adds 16 tests, including every four-task physical
 completion permutation and a 20,000-task batch on 64 KiB caller and worker
 stacks.
 
-The durable-resume preimplementation contract adds 35 invariant-ledger rows,
+The durable-resume contract adds 35 invariant-ledger rows,
 45 referenced Rocq obligations with 18 explicit no-assumption reports, 18
 configured TLA+ predicates across eight scenario families, 21 exact SMT
 controls, 4,695 independent executable-oracle cases, 35 causally killed
-mutants, and 35 required-red Rust properties. Production persistence remains
-absent until those properties are implemented without moving portable codecs
-or runtime artifacts into schedlib.
+mutants, and 35 Rust refinement properties. The stack-safe semantic core is
+accepted at commit `086bfb5d6a240ccc7c4e5f3bbaae1e7ed9a4cea1`; all 35
+properties pass, including 100,000 tasks on a 64 KiB stack. Portable codecs
+remain assigned to `schedlib-interop`, and runtime artifacts remain outside
+schedlib.
 
 ## Use the serial core
 
@@ -99,7 +101,7 @@ cargo run --release --features rayon --example rayon
 - [`docs/usage/formal-workflow.md`](docs/usage/formal-workflow.md) provides the
   operator workflow.
 - [`docs/usage/durable-resume-contract.md`](docs/usage/durable-resume-contract.md)
-  provides the preimplementation verification and handoff workflow.
+  provides the implemented core and verification workflow.
 - [`docs/usage/rust-api.md`](docs/usage/rust-api.md) documents production API
   construction and execution.
 - [`docs/engineering/algorithms-and-complexity.md`](docs/engineering/algorithms-and-complexity.md)

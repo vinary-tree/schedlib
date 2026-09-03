@@ -72,14 +72,25 @@ verify_invariant_ledger() {
           print "duplicate causal mutant identifier: " $9
           failed = 1
         }
-        if ($10 != "required-before-implementation") {
-          print "durable invariant row is prematurely accepted: " $1
+        if ($10 == "required-before-implementation") {
+          row_state = "preimplementation"
+        } else if ($10 ~ /^accepted@[0-9a-f]+$/ && length($10) == 49) {
+          row_state = "postimplementation"
+        } else {
+          print "durable invariant row has invalid acceptance state: " $1
+          failed = 1
+        }
+        if (state == "") {
+          state = row_state
+        } else if (state != row_state) {
+          print "durable invariant ledger mixes acceptance states"
           failed = 1
         }
         count++
       }
       END {
         print "durable invariant obligations: " count
+        print "durable invariant ledger state: " state
         if (count != 35) {
           print "durable invariant ledger must contain exactly 35 obligations"
           failed = 1

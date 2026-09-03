@@ -25,7 +25,7 @@ it.
 9. [Algorithms and complexity](engineering/algorithms-and-complexity.md)
    explains the selected stack-safe data structures and exact bounds.
 10. [Refinement and testing](engineering/refinement-and-testing.md) translates
-   every formal invariant into preimplementation tests and acceptance gates.
+   every formal invariant into tests and acceptance gates.
 11. [Durable resume implementation acceptance](engineering/durable-resume-verification.md)
    gives the implementation shapes, properties, and terminal gates.
 12. [Cancellation and resources](security/cancellation-and-resources.md)
@@ -34,8 +34,8 @@ it.
    identifies trust boundaries and fail-closed behavior.
 14. [Rust API](usage/rust-api.md) gives a complete construction and execution
    example.
-15. [Durable resume preimplementation contract](usage/durable-resume-contract.md)
-   explains the current required-red workflow and future handoff.
+15. [Durable committed-prefix resume](usage/durable-resume-contract.md)
+   explains the implemented core, replay policy, and continuing verification.
 16. [Formal workflow](usage/formal-workflow.md) gives reproducible commands and
    evidence locations.
 

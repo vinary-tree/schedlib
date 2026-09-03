@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,8 +49,31 @@ def main() -> None:
         rows = list(reader)
     if len(rows) != 35:
         fail(f"expected 35 durable ledger rows, found {len(rows)}")
-    if any(row["acceptance-state"] != "required-before-implementation" for row in rows):
-        fail("durable ledger contains a prematurely accepted row")
+    states = {row["acceptance-state"] for row in rows}
+    preimplementation = states == {"required-before-implementation"}
+    accepted_pattern = re.compile(r"accepted@[0-9a-f]{40}")
+    postimplementation = all(
+        accepted_pattern.fullmatch(row["acceptance-state"]) for row in rows
+    )
+    if not preimplementation and not postimplementation:
+        fail(
+            "durable ledger must be uniformly required-before-implementation "
+            "or carry one exact implementation commit per accepted row"
+        )
+    if postimplementation:
+        evidence_commits = {
+            row["acceptance-state"].removeprefix("accepted@") for row in rows
+        }
+        for commit in evidence_commits:
+            resolved = subprocess.run(
+                ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+                cwd=ROOT,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if resolved.returncode != 0:
+                fail(f"accepted implementation commit is unavailable: {commit}")
 
     expected_oracles = unique(
         [row["exhaustive-oracle"] for row in rows], "ledger oracle"
@@ -97,7 +121,8 @@ def main() -> None:
         fail("every required-red property must have exactly one #[test] attribute")
 
     print(
-        "Durable-resume traceability validated: "
+        "Durable-resume traceability validated "
+        f"in {'preimplementation' if preimplementation else 'postimplementation'} mode: "
         f"{len(rows)} ledger rows, {len(actual_oracles)} oracles, "
         f"{len(actual_tests)} required-red tests, and {len(actual_mutants)} mutants."
     )
