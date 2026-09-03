@@ -122,9 +122,13 @@ make verify
 Run production acceptance with one Cargo job inside a bounded systemd scope as
 described in the [formal workflow](docs/usage/formal-workflow.md). The required
 gates include `cargo test --all-targets`, release tests, strict Clippy, Rustdoc,
-diagram rendering, `vinary-doc-lint`, and `pgmcp bug-gate`.
+verified packaging, diagram rendering, `vinary-doc-lint`, and `pgmcp bug-gate`.
 
 The scripts create all generated state, logs, and temporary files beneath the
 ignored, persistent `target/` directory. Formal checks self-enter a
 `systemd-run --user --scope` with a 4 GiB memory ceiling, no swap, bounded CPU,
 and headless Java. No workflow uses a memory-backed temporary directory.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

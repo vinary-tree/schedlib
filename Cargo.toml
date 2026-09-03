@@ -14,6 +14,7 @@ publish = ["crates-io"]
 keywords = ["scheduling", "deterministic", "concurrency", "stack-safe"]
 categories = ["algorithms", "concurrency"]
 include = [
+    "/.github/**",
     "/src/**",
     "/examples/**",
     "/tests/**",
@@ -24,6 +25,7 @@ include = [
     "/Cargo.lock",
     "/Makefile",
     "/README.md",
+    "/LICENSE",
 ]
 
 [features]
