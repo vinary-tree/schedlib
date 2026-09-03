@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod durable;
 mod effects;
 mod execution;
 mod plan;
